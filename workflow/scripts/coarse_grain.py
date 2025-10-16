@@ -27,6 +27,8 @@ class Params:
     minimum_domain_length: int = 3
     minimum_idr_length: int = 3
 
+    box_buffer : float = 100.0
+
 
 def coarse_grain(
     output: Path,
@@ -54,7 +56,7 @@ def coarse_grain(
         minimum_idr_length=params.minimum_idr_length,
     )
 
-    lammps_data = generate_lammps_data(protein_data, globular_domains)
+    lammps_data = generate_lammps_data(protein_data, globular_domains, box_buffer=params.box_buffer)
 
     data_file_str = write_lammps_data_file(lammps_data)
     with data_file_path.open("w") as f:
