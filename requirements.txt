@@ -1,2 +1,4 @@
 polars
 snakemake
+snakemake-executor-plugin-cluster-generic
+git+https://github.com/MSallermann/lammps_input_generator_for_mpipi.git
