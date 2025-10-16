@@ -1,4 +1,4 @@
-database_file: "/home/moritz/Biocondensates/predictor/lammps_input_generator_for_mpipi/rg_workflow/workflow/samples.parquet"
+database_file: "/home/moritz/Biocondensates/predictor/lammps_input_generator_for_mpipi/rg_workflow/samples.parquet"
 lammps_binary: "/home/moritz/Biocondensates/lammps/bin/lmp"
 
 temperature: 300
@@ -10,3 +10,16 @@ minimum_idr_length: 3
 threshold: 70.0
 
 rg_skip: 0
+
+# MareNostrum
+marenostrum_compute:
+  gp_debug:
+    queue_name: gp_debug
+    maximum_time_limit: 02:00:00
+    number_of_cores: 112 # Max. seems to be 112 per node
+    nodes: 1
+  gp_resa:
+    queue_name: gp_resa
+    maximum_time_limit: 3-00:00:00
+    number_of_cores: 112 # Max. seems to be 112 per node
+    nodes: 1

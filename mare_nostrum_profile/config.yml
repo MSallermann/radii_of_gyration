@@ -1,0 +1,34 @@
+executor: cluster-generic
+cluster-generic-submit-cmd:
+  mkdir -p logs/{rule} &&
+  sbatch
+    --nodes={resources.nodes}
+    --ntasks-per-node={resources.ntasks_per_node}
+    --partition={resources.partition}
+    --job-name=smk-{rule}-{wildcards}
+    --output={resources.slurm_out}
+    --error={resources.slurm_err}
+    --time={resources.time}
+    --account={resources.account}
+    --qos={resources.partition}
+cluster-generic-cancel-cmd: scancel
+default-resources:
+  - nodes=1
+  - partition=gp_resa
+  - time="3-00:00:00"
+  - ntasks_per_node=112
+  - account=ucm96
+  - slurm_out="logs/{rule}/{rule}-{wildcards}-%j.out"
+  - slurm_err="logs/{rule}/{rule}-{wildcards}-%j.err"
+restart-times: 1
+max-jobs-per-second: 20
+max-status-checks-per-second: 1
+local-cores: 1
+latency-wait: 120
+jobs: 100
+keep-going: True
+rerun-incomplete: True
+printshellcmds: True
+scheduler: greedy
+use-conda: False
+wait-for-files: []

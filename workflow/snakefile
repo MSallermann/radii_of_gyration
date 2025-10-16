@@ -1,5 +1,6 @@
 import polars as pl
 from pathlib import Path
+import itertools
 
 
 configfile: "./config.yml"
@@ -9,11 +10,13 @@ DATA_BASE = pl.read_parquet(config["database_file"])
 
 
 def get_plddts(wc):
-    return DATA_BASE.filter(pl.col("accession") == wc.accession)["plddts"][0]
+    accession = samples[wc.sample]["accession"]
+    return DATA_BASE.filter(pl.col("accession") == accession)["plddts"][0]
 
 
 def get_cif(wc):
-    return DATA_BASE.filter(pl.col("accession") == wc.accession)["cif_text"][0]
+    accession = samples[wc.sample]["accession"]
+    return DATA_BASE.filter(pl.col("accession") == accession)["cif_text"][0]
 
 
 TEMPERATURE = config["temperature"]
@@ -28,30 +31,35 @@ LAMMPS_BIN = config["lammps_binary"]
 
 RG_SKIP = config["rg_skip"]
 
-accessions = ["P35637"]
+accessions = DATA_BASE["accession"]
+
+thresholds = [25, 50, 75, 100]
+
+samples = {}
+for acc, thresh in itertools.product(accessions, thresholds):
+    key = f"{acc}_{thresh}"
+    samples[key] = {"accession": acc, "thresh": thresh}
 
 
 rule all:
     input:
-        [f"results/lammps_files/{acc}" for acc in accessions],
-        [f"results/lammps_runs/{acc}/gyration.out" for acc in accessions],
-        [f"results/rg/{acc}/rg.json" for acc in accessions],
         [f"results/aggregated_rg.csv" for acc in accessions],
 
 
 rule prepare_coarse_grained_inputs:
+    localrule: True
     input:
         template_file=ancient(
             Path(workflow.source_path("templates/rg_script.lmp.jinja"))
         ),
     output:
-        directory("results/lammps_files/{accession}"),
+        directory("results/lammps_files/{sample}"),
     params:
         temp=TEMPERATURE,
         ionic_strength=IONIC_STRENGTH,
         n_steps=N_STEPS,
         timestep=TIMESTEP,
-        threshold=THRESHOLD,
+        threshold=lambda wc: samples[wc.sample]["thresh"],
         minimum_domain_length=MINIMUM_DOMAIN_LENGTH,
         minimum_idr_length=MINIMUM_IDR_LENGTH,
         plddts=get_plddts,
@@ -62,21 +70,26 @@ rule prepare_coarse_grained_inputs:
 
 rule run_lammps:
     input:
-        "results/lammps_files/{accession}",
+        "results/lammps_files/{sample}",
     output:
-        folder=directory("results/lammps_runs/{accession}"),
-        gyration="results/lammps_runs/{accession}/gyration.out",
+        folder=directory("results/lammps_runs/{sample}"),
+        gyration="results/lammps_runs/{sample}/gyration.out",
+    resources:
+        nodes=1,
+        n_tasks_per_node=1,
+        slurm_out=lambda wc: f"results/lammps_files/{wc.sample}slurm-%j.out",
+        slurm_err=lambda wc: f"results/lammps_files/{wc.sample}slurm-%j.err",
     shell:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
-        f"{LAMMPS_BIN} -in script.lmp\n"
+        f"srun {LAMMPS_BIN} -in script.lmp\n"
 
 
 rule average_radius_of_gyration:
     input:
-        "results/lammps_runs/{accession}/gyration.out",
+        "results/lammps_runs/{sample}/gyration.out",
     output:
-        rg_json="results/rg/{accession}/rg.json",
+        rg_json="results/rg/{sample}/rg.json",
     params:
         n_skip=int(RG_SKIP),
     script:
@@ -85,9 +98,12 @@ rule average_radius_of_gyration:
 
 rule aggregate_rg:
     input:
-        [f"results/rg/{accession}/rg.json" for accession in accessions],
+        [f"results/rg/{sample}/rg.json" for sample in samples],
     params:
-        add_columns={"accession": [f"{accession}" for accession in accessions]},
+        add_columns={
+            "accession": [samples[sample]["accession"] for sample in samples],
+            "threshold": [samples[sample]["thresh"] for sample in samples],
+        },
         ignore_columns=["file"],
     output:
         "results/aggregated_rg.csv",
