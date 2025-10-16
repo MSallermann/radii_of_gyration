@@ -1,0 +1,95 @@
+import polars as pl
+from pathlib import Path
+
+
+configfile: "./config.yml"
+
+
+DATA_BASE = pl.read_parquet(config["database_file"])
+
+
+def get_plddts(wc):
+    return DATA_BASE.filter(pl.col("accession") == wc.accession)["plddts"][0]
+
+
+def get_cif(wc):
+    return DATA_BASE.filter(pl.col("accession") == wc.accession)["cif_text"][0]
+
+
+TEMPERATURE = config["temperature"]
+IONIC_STRENGTH = config["ionic_strength"]
+N_STEPS = config["n_steps"]
+TIMESTEP = config["timestep"]
+MINIMUM_DOMAIN_LENGTH = config["minimum_domain_length"]
+MINIMUM_IDR_LENGTH = config["minimum_idr_length"]
+THRESHOLD = config["threshold"]
+
+LAMMPS_BIN = config["lammps_binary"]
+
+RG_SKIP = config["rg_skip"]
+
+accessions = ["P35637"]
+
+
+rule all:
+    input:
+        [f"results/lammps_files/{acc}" for acc in accessions],
+        [f"results/lammps_runs/{acc}/gyration.out" for acc in accessions],
+        [f"results/rg/{acc}/rg.json" for acc in accessions],
+        [f"results/aggregated_rg.csv" for acc in accessions],
+
+
+rule prepare_coarse_grained_inputs:
+    input:
+        template_file=ancient(
+            Path(workflow.source_path("templates/rg_script.lmp.jinja"))
+        ),
+    output:
+        directory("results/lammps_files/{accession}"),
+    params:
+        temp=TEMPERATURE,
+        ionic_strength=IONIC_STRENGTH,
+        n_steps=N_STEPS,
+        timestep=TIMESTEP,
+        threshold=THRESHOLD,
+        minimum_domain_length=MINIMUM_DOMAIN_LENGTH,
+        minimum_idr_length=MINIMUM_IDR_LENGTH,
+        plddts=get_plddts,
+        cif_text=get_cif,
+    script:
+        workflow.source_path("scripts/coarse_grain.py")
+
+
+rule run_lammps:
+    input:
+        "results/lammps_files/{accession}",
+    output:
+        folder=directory("results/lammps_runs/{accession}"),
+        gyration="results/lammps_runs/{accession}/gyration.out",
+    shell:
+        "cp -r {input}/* {output.folder}\n"
+        "cd {output.folder}\n"
+        f"{LAMMPS_BIN} -in script.lmp\n"
+
+
+rule average_radius_of_gyration:
+    input:
+        "results/lammps_runs/{accession}/gyration.out",
+    output:
+        rg_json="results/rg/{accession}/rg.json",
+    params:
+        n_skip=int(RG_SKIP),
+    script:
+        workflow.source_path("scripts/average_radius_of_gyration.py")
+
+
+rule aggregate_rg:
+    input:
+        [f"results/rg/{accession}/rg.json" for accession in accessions],
+    params:
+        add_columns={"accession": [f"{accession}" for accession in accessions]},
+        ignore_columns=["file"],
+    output:
+        "results/aggregated_rg.csv",
+    script:
+        workflow.source_path("scripts/aggregate_json.py")

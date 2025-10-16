@@ -1,0 +1,12 @@
+database_file: "/home/moritz/Biocondensates/predictor/lammps_input_generator_for_mpipi/rg_workflow/workflow/samples.parquet"
+lammps_binary: "/home/moritz/Biocondensates/lammps/bin/lmp"
+
+temperature: 300
+ionic_strength: 150
+n_steps: 100000 #50000000
+timestep: 10.0
+minimum_domain_length: 3
+minimum_idr_length: 3
+threshold: 70.0
+
+rg_skip: 0
