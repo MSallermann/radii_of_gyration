@@ -1,6 +1,7 @@
 import polars as pl
 from pathlib import Path
 import itertools
+import json
 
 
 configfile: "config.yml"
@@ -8,39 +9,48 @@ configfile: "config.yml"
 
 DATA_BASE = pl.read_parquet(config["database_file"])
 
+with open("./samples.json", "rb") as f:
+    SAMPLES = json.load(f)
 
+
+# Function to get the plddts from the database
 def get_plddts(wc):
-    accession = samples[wc.sample]["accession"]
+    accession = SAMPLES[wc.sample]["accession"]
     return DATA_BASE.filter(pl.col("accession") == accession)["plddts"][0]
 
 
+# Function to get the cif from the database
 def get_cif(wc):
-    accession = samples[wc.sample]["accession"]
+    accession = SAMPLES[wc.sample]["accession"]
     return DATA_BASE.filter(pl.col("accession") == accession)["cif_text"][0]
 
 
-TEMPERATURE = config["temperature"]
-IONIC_STRENGTH = config["ionic_strength"]
+# sample wild card to temperature
+def get_temp(wc):
+    return SAMPLES[wc.sample]["temperature"]
+
+
+# sample wild card to ionic strength
+def get_ionic_strength(wc):
+    return SAMPLES[wc.sample]["ionic_strength"]
+
+
+# sample wild card to threshold
+def get_threshold(wc):
+    return SAMPLES[wc.sample]["threshold"]
+
+
 N_STEPS = config["n_steps"]
 TIMESTEP = config["timestep"]
 MINIMUM_DOMAIN_LENGTH = config["minimum_domain_length"]
 MINIMUM_IDR_LENGTH = config["minimum_idr_length"]
-
-thresholds = config["thresholds"]
 LAMMPS_BIN = config["lammps_binary"]
 RG_SKIP = config["rg_skip"]
-
-accessions = config["accessions"]
-
-samples = {}
-for acc, thresh in itertools.product(accessions, thresholds):
-    key = f"{acc}_{thresh}"
-    samples[key] = {"accession": acc, "thresh": thresh}
 
 
 rule all:
     input:
-        [f"results/aggregated_rg.csv" for acc in accessions],
+        [f"results/aggregated_rg.csv" for sample in SAMPLES.keys()],
 
 
 rule prepare_coarse_grained_inputs:
@@ -52,11 +62,11 @@ rule prepare_coarse_grained_inputs:
     output:
         directory("results/lammps_files/{sample}"),
     params:
-        temp=TEMPERATURE,
-        ionic_strength=IONIC_STRENGTH,
+        temp=get_temp,
+        ionic_strength=get_ionic_strength,
         n_steps=N_STEPS,
         timestep=TIMESTEP,
-        threshold=lambda wc: samples[wc.sample]["thresh"],
+        threshold=get_threshold,
         minimum_domain_length=MINIMUM_DOMAIN_LENGTH,
         minimum_idr_length=MINIMUM_IDR_LENGTH,
         plddts=get_plddts,
@@ -83,6 +93,7 @@ rule run_lammps:
 
 
 rule average_radius_of_gyration:
+    localrule: True
     input:
         "results/lammps_runs/{sample}/gyration.out",
     output:
@@ -94,12 +105,19 @@ rule average_radius_of_gyration:
 
 
 rule aggregate_rg:
+    localrule: True
     input:
-        [f"results/rg/{sample}/rg.json" for sample in samples],
+        [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={
-            "accession": [samples[sample]["accession"] for sample in samples],
-            "threshold": [samples[sample]["thresh"] for sample in samples],
+            "accession": [SAMPLES[sample]["accession"] for sample in SAMPLES.keys()],
+            "threshold": [SAMPLES[sample]["threshold"] for sample in SAMPLES.keys()],
+            "temperature": [
+                SAMPLES[sample]["temperature"] for sample in SAMPLES.keys()
+            ],
+            "ionic_strength": [
+                SAMPLES[sample]["ionic_strength"] for sample in SAMPLES.keys()
+            ],
         },
         ignore_columns=["file"],
     output:

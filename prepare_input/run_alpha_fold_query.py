@@ -73,11 +73,12 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
     )
-
     # ids_to_query = pl.read_parquet("./data_idrs.parquet").sample(8000)["uniprot_id"]
 
-    ids_to_query = ["P37840", "P35637"]
+    # ids_to_query = ["P37840", "P35637"]
 
-    output_path = Path("./query_results.parquet")
+    ids_to_query = ["P37840", "Q01718", "Q5A5Q6", "P06971", "P13468"]
+
+    output_path = Path("../samples.parquet")
 
     main(uniprot_ids_in=ids_to_query, output_path=output_path)
