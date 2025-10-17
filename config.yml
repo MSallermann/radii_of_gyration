@@ -1,15 +1,17 @@
 database_file: "/home/moritz/Biocondensates/predictor/lammps_input_generator_for_mpipi/rg_workflow/samples.parquet"
 lammps_binary: "/home/moritz/Biocondensates/lammps/bin/lmp"
 
-temperature: 300
+temperature: 10
 ionic_strength: 150
-n_steps: 100000 #50000000
+n_steps: 50000000
 timestep: 10.0
 minimum_domain_length: 3
 minimum_idr_length: 3
-threshold: 70.0
 
-rg_skip: 0
+rg_skip: 20
+
+accessions : ["P37840"]
+thresholds: [50.0, 60.0, 70.0, 80.0, 90.0]
 
 # MareNostrum
 marenostrum_compute:

@@ -3,7 +3,7 @@ from pathlib import Path
 import itertools
 
 
-configfile: "./config.yml"
+configfile: "config.yml"
 
 
 DATA_BASE = pl.read_parquet(config["database_file"])
@@ -25,15 +25,12 @@ N_STEPS = config["n_steps"]
 TIMESTEP = config["timestep"]
 MINIMUM_DOMAIN_LENGTH = config["minimum_domain_length"]
 MINIMUM_IDR_LENGTH = config["minimum_idr_length"]
-THRESHOLD = config["threshold"]
 
+thresholds = config["thresholds"]
 LAMMPS_BIN = config["lammps_binary"]
-
 RG_SKIP = config["rg_skip"]
 
-accessions = DATA_BASE["accession"]
-
-thresholds = [25, 50, 75, 100]
+accessions = config["accessions"]
 
 samples = {}
 for acc, thresh in itertools.product(accessions, thresholds):
@@ -77,8 +74,8 @@ rule run_lammps:
     resources:
         nodes=1,
         n_tasks_per_node=1,
-        slurm_out=lambda wc: f"results/lammps_files/{wc.sample}slurm-%j.out",
-        slurm_err=lambda wc: f"results/lammps_files/{wc.sample}slurm-%j.err",
+        slurm_out=lambda wc: f"results/lammps_files/{wc.sample}.out",
+        slurm_err=lambda wc: f"results/lammps_files/{wc.sample}.err",
     shell:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
