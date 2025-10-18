@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from snakemake.script import snakemake
 
 
 def main(
@@ -12,32 +11,31 @@ def main(
     ignore_keys: list[str] | None = None,
 ):
     output_path = Path(output_path)
-    data = {}
+    data = []
 
     for idx, _ip in enumerate(input_paths):
         ip = Path(_ip)
-        with ip.open("r") as f:
-            res = json.load(f)
 
-        res["file"] = str(ip)
+        if ip.exists():
+            with ip.open("r") as f:
+                record = json.load(f)
+            record["file"] = str(ip)
+        else:
+            record = {"file": None}
 
         if added_columns is not None:
             for k in added_columns:
                 item = added_columns[k][idx]
-                if k in data:
-                    data[k].append(item)
-                else:
-                    data[k] = [item]
+                record["k"] = item
 
-        for k, v in res.items():
-            if ignore_keys is not None and k in ignore_keys:
-                continue
-            if k in data:
-                data[k].append(v)
-            else:
-                data[k] = [v]
+        if ignore_keys is not None:
+            for k in ignore_keys:
+                record.pop(k)
 
-    df = pd.DataFrame(data)
+        data.append(record)
+
+    df = pd.DataFrame.from_records(data)
+
     with output_path.open("w") as f:
         if output_path.suffix == ".csv":
             df.to_csv(f)
@@ -49,6 +47,8 @@ def main(
 
 
 if __name__ == "__main__":
+    from snakemake.script import snakemake
+
     main(
         snakemake.input,
         snakemake.output[0],
