@@ -1,2 +1,5 @@
 *.parquet
+*.csv
+*.json
+*.tar.gz
 .snakemake/
