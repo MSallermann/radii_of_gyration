@@ -1,4 +1,5 @@
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -8,12 +9,11 @@ from mpipi_lammps_gen.generate_lammps_files import (
     get_lammps_group_definition,
     get_lammps_minimize_command,
     get_lammps_nvt_command,
+    get_lammps_viscous_command,
     parse_cif,
     write_lammps_data_file,
 )
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
-
-from dataclasses import dataclass
 
 
 @dataclass
@@ -27,7 +27,7 @@ class Params:
     minimum_domain_length: int = 3
     minimum_idr_length: int = 3
 
-    box_buffer : float = 100.0
+    box_buffer: float = 100.0
 
 
 def coarse_grain(
@@ -56,7 +56,9 @@ def coarse_grain(
         minimum_idr_length=params.minimum_idr_length,
     )
 
-    lammps_data = generate_lammps_data(protein_data, globular_domains, box_buffer=params.box_buffer)
+    lammps_data = generate_lammps_data(
+        protein_data, globular_domains, box_buffer=params.box_buffer
+    )
 
     data_file_str = write_lammps_data_file(lammps_data)
     with data_file_path.open("w") as f:
@@ -68,12 +70,20 @@ def coarse_grain(
         lammps_data, etol=0.0, ftol=0.0023, maxiter=10000, max_eval=40000, timestep=0.1
     )
 
+    viscous_cmd = get_lammps_viscous_command(
+        lammps_data, n_time_steps=10000, timestep=0.1, damp=1000, limit=0.01
+    )
+
     nvt_cmd = get_lammps_nvt_command(
         lammps_data,
         timestep=params.timestep,
         temp=params.temp,
         n_time_steps=params.n_steps,
+        dt_ramp_up=[0.1, 1.0],
+        steps_per_stage=10000,
     )
+
+    run_str = min_cmd + viscous_cmd + nvt_cmd
 
     variables: dict[str, Any] = {
         "input": {"template": template_file},
@@ -83,7 +93,7 @@ def coarse_grain(
             "ionic_strength": params.ionic_strength,
             "groups_definition_str": groups_definition_str,
             "data_file_name": data_file_path.name,
-            "run_str": min_cmd + nvt_cmd,
+            "run_str": run_str,
         },
     }
 
