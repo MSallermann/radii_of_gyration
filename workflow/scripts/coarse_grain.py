@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from mpipi_lammps_gen.generate_lammps_files import (
-    decide_globular_domains,
     generate_lammps_data,
     get_lammps_group_definition,
     get_lammps_minimize_command,
@@ -13,6 +12,7 @@ from mpipi_lammps_gen.generate_lammps_files import (
     parse_cif,
     write_lammps_data_file,
 )
+from mpipi_lammps_gen.globular_domains import decide_globular_domains_from_sequence
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
 
 
@@ -49,7 +49,7 @@ def coarse_grain(
 
     protein_data = parse_cif(cif_text=cif_text)
 
-    globular_domains = decide_globular_domains(
+    globular_domains = decide_globular_domains_from_sequence(
         plddts=plddts,
         threshold=params.threshold,
         minimum_domain_length=params.minimum_domain_length,
@@ -67,7 +67,7 @@ def coarse_grain(
     groups_definition_str = get_lammps_group_definition(lammps_data)
 
     min_cmd = get_lammps_minimize_command(
-        lammps_data, etol=0.0, ftol=0.0023, maxiter=10000, max_eval=40000, timestep=0.1
+        lammps_data, etol=0.0, ftol=0.0001, maxiter=10000, max_eval=40000, timestep=0.1
     )
 
     viscous_cmd = get_lammps_viscous_command(
