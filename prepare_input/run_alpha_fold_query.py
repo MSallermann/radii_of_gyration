@@ -29,7 +29,13 @@ def main(uniprot_ids_in: Iterable[str], output_path: Path):
     logger.info(f"Therefore I will query {len(ids_to_query)} ids.")
 
     query_result_generator = alpha_fold_query.query_alphafold_bulk(
-        list(ids_to_query), retries=1, backoff_time=1
+        list(ids_to_query),
+        get_cif=True,
+        get_pae_matrix=True,
+        get_pdb=False,
+        timeout=30,
+        retries=4,
+        backoff_time=5,
     )
 
     query_results = []
@@ -60,10 +66,16 @@ def main(uniprot_ids_in: Iterable[str], output_path: Path):
         raise e
     finally:
         df_out_new = pl.DataFrame(query_results)
-        df_out = df_out_new if df_out is None else pl.concat((df_out, df_out_new))
 
-        logger.info(f"Saving to {output_path}")
-        df_out.write_parquet(output_path)
+        try:
+            df_out = df_out_new if df_out is None else pl.concat((df_out, df_out_new))
+            logger.info(f"Saving to {output_path}")
+            df_out.write_parquet(output_path)
+        except Exception as e:
+            logger.exception(
+                f"Exception when trying to concat new results to old results. Saving new results in {output_path.with_suffix("new.parquet")} "
+            )
+            df_out_new.write_parquet(output_path.with_suffix(".new.parquet"))
 
 
 if __name__ == "__main__":
@@ -73,12 +85,16 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
     )
+
     # ids_to_query = pl.read_parquet("./data_idrs.parquet").sample(8000)["uniprot_id"]
-
     # ids_to_query = ["P37840", "P35637"]
+    # ids_to_query = ["P37840", "Q01718", "Q5A5Q6", "P06971", "P13468"]
+    # ids_to_query = ["Q9ULK0"]
 
-    ids_to_query = ["P37840", "Q01718", "Q5A5Q6", "P06971", "P13468"]
+    ids_to_query = pl.read_parquet(
+        "/home/moritz/Biocondensates/predictor/lammps_input_generator_for_mpipi/rg_workflow/samples.parquet"
+    )["accession"]
 
-    output_path = Path("../samples.parquet")
+    output_path = Path("./samples_with_pae.parquet")
 
     main(uniprot_ids_in=ids_to_query, output_path=output_path)
