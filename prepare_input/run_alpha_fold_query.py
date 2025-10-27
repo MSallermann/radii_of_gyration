@@ -9,7 +9,50 @@ from mpipi_lammps_gen import alpha_fold_query
 logger = logging.getLogger(__name__)
 
 
-def main(uniprot_ids_in: Iterable[str], output_path: Path):
+def save(
+    query_results: Iterable[alpha_fold_query.AlphaFoldQueryResult],
+    output_path: Path,
+):
+    if query_results == 0:
+        return
+
+    # Convert the new results to a dataframe
+    df_out_new = pl.DataFrame(query_results)
+
+    # If no query results, just exit
+    if len(df_out_new) == 0:
+        return
+
+    # If something already exists at the output path we try to read it in as a dataframe
+    if output_path.exists():
+        try:
+            df_out_old = pl.read_parquet(output_path)
+        except Exception as e:
+            df_out_old = None
+    else:
+        df_out_old = None
+
+    if df_out_old is None:
+        df_out = df_out_new
+    else:
+        try:
+            # In case we could read it in as a dataframe, we try to concatenate the two frames
+            df_out = pl.concat((df_out_old, df_out_new))
+        except Exception as e:
+            # If the concatenation fails, we change the output path so that we do not lose the old data
+            df_out = df_out_new
+            logger.exception(
+                "Cannot concatenate data frames. Changing output path to not overwrite data"
+            )
+            output_path = output_path.with_name(
+                output_path.with_suffix("").name + "_new"
+            ).with_suffix(output_path.suffix)
+
+    logger.info(f"Saving to {output_path}")
+    df_out.write_parquet(output_path)
+
+
+def main(uniprot_ids_in: Iterable[str], output_path: Path, n_flush: int = 100):
     uniprot_ids_in = list(uniprot_ids_in)
 
     if output_path.exists():
@@ -54,6 +97,11 @@ def main(uniprot_ids_in: Iterable[str], output_path: Path):
 
             query_results.append(query_result)
 
+            if idx % n_flush == 0:
+                logger.info("Flushing results")
+                save(query_results=query_results, output_path=output_path)
+                query_results.clear()
+
     except BaseException as e:
         output_path = output_path.with_name("saved_after_exc").with_suffix(".parquet")
 
@@ -65,36 +113,24 @@ def main(uniprot_ids_in: Iterable[str], output_path: Path):
 
         raise e
     finally:
-        df_out_new = pl.DataFrame(query_results)
-
-        try:
-            df_out = df_out_new if df_out is None else pl.concat((df_out, df_out_new))
-            logger.info(f"Saving to {output_path}")
-            df_out.write_parquet(output_path)
-        except Exception as e:
-            logger.exception(
-                f"Exception when trying to concat new results to old results. Saving new results in {output_path.with_suffix("new.parquet")} "
-            )
-            df_out_new.write_parquet(output_path.with_suffix(".new.parquet"))
+        logger.info("Run finished. Saving")
+        save(query_results=query_results, output_path=output_path)
 
 
 if __name__ == "__main__":
+    from logging import FileHandler
     from rich.logging import RichHandler
 
     FORMAT = "%(message)s"
     logging.basicConfig(
-        level=logging.INFO, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+        level=logging.INFO,
+        format=FORMAT,
+        datefmt="[%X]",
+        handlers=[RichHandler(), FileHandler("query_alpha_fold.log")],
     )
 
-    # ids_to_query = pl.read_parquet("./data_idrs.parquet").sample(8000)["uniprot_id"]
-    # ids_to_query = ["P37840", "P35637"]
-    # ids_to_query = ["P37840", "Q01718", "Q5A5Q6", "P06971", "P13468"]
-    # ids_to_query = ["Q9ULK0"]
-
-    ids_to_query = pl.read_parquet(
-        "/home/moritz/Biocondensates/predictor/lammps_input_generator_for_mpipi/rg_workflow/samples.parquet"
-    )["accession"]
+    ids_to_query = pl.read_parquet("./data_idrs.parquet")["uniprot_id"]
 
     output_path = Path("./samples_with_pae.parquet")
 
-    main(uniprot_ids_in=ids_to_query, output_path=output_path)
+    main(uniprot_ids_in=ids_to_query, output_path=output_path, n_flush=200)
