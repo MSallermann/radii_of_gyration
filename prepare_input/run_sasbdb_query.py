@@ -17,7 +17,11 @@ def main(accessions: Iterable[str], output_path: Path, n_flush: int = 100):
 
     for idx, a in enumerate(accessions_list):
         logger.info(f"Queried {a} [{idx} / {len(accessions_list)}]")
-        query_results.extend(query_sasbdb(a))
+
+        query_result = query_sasbdb(a)
+
+        if query_result is not None:
+            query_results.extend(query_result)
 
         if idx != 0 and idx % n_flush == 0:
             save(query_results=query_results, output_path=output_path)

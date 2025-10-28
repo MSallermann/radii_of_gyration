@@ -20,7 +20,9 @@ def find_next_free_file(file: Path, n_max: int = 1000) -> Path:
         if not test_name.exists():
             return test_name
 
-    msg = f"Could not find free file within {n_max} attempts. Last attempt `{test_name}`"
+    msg = (
+        f"Could not find free file within {n_max} attempts. Last attempt `{test_name}`"
+    )
     raise Exception(msg)
 
 
@@ -70,69 +72,24 @@ def save(
     df_out.write_parquet(output_path)
 
 
-def main(uniprot_ids_in: Iterable[str], output_path: Path, n_flush: int = 100):
-    uniprot_ids_in = list(uniprot_ids_in)
-
-    if output_path.exists():
-        df_out = pl.read_parquet(output_path)
-        seen = set(df_out["accession"])
-    else:
-        df_out = None
-        seen = set()
-
-    # Remove all the ids we have seen already
-    uniprot_ids_in_unique = set(uniprot_ids_in)
-    ids_to_query = uniprot_ids_in_unique.difference(seen)
-
-    logger.info(
-        f"Of {len(uniprot_ids_in)} input ids, {len(uniprot_ids_in_unique)} are unique. Out of these {len(seen)} are already in the output file '{output_path}'."
-    )
-    logger.info(f"Therefore I will query {len(ids_to_query)} ids.")
-
-    query_result_generator = alpha_fold_query.query_alphafold_bulk(
-        list(ids_to_query),
-        get_cif=True,
-        get_pae_matrix=True,
-        get_pdb=False,
-        timeout=30,
-        retries=4,
-        backoff_time=5,
-    )
-
+def main(accessions: Iterable[str], output_path: Path, n_flush: int = 100):
     query_results = []
 
-    idx = 0
-    try:
-        for query_result in query_result_generator:
-            idx += 1
+    accessions_list = list(accessions)
 
-            logger.info(
-                f"Queried {query_result.accession} [{idx} / {len(ids_to_query)}]"
-            )
+    for idx, a in enumerate(accessions_list):
+        logger.info(f"Queried {a} [{idx} / {len(accessions_list)}]")
 
-            if query_result.http_status != 200:
-                continue
+        query_result = alpha_fold_query.query_alphafold(a)
 
-            query_results.append(query_result)
+        if query_result is not None:
+            query_results.extend(query_result)
 
-            if idx % n_flush == 0:
-                logger.info("Flushing results")
-                save(query_results=query_results, output_path=output_path)
-                query_results.clear()
+        if idx != 0 and idx % n_flush == 0:
+            save(query_results=query_results, output_path=output_path)
+            query_results = []
 
-    except BaseException as e:
-        output_path = output_path.with_name("saved_after_exc").with_suffix(".parquet")
-
-        logger.exception(
-            f"Encountered exception {e}. Will try to save data to {output_path}",
-            stack_info=True,
-            stacklevel=1,
-        )
-
-        raise e
-    finally:
-        logger.info("Run finished. Saving")
-        save(query_results=query_results, output_path=output_path)
+    save(query_results=query_results, output_path=output_path)
 
 
 if __name__ == "__main__":
@@ -147,8 +104,12 @@ if __name__ == "__main__":
         handlers=[RichHandler(), FileHandler("query_alpha_fold.log")],
     )
 
-    ids_to_query = pl.read_parquet("./data_idrs.parquet")["uniprot_id"]
+    # ids_to_query = pl.read_parquet("./data_idrs.parquet")["uniprot_id"]
 
-    output_path = Path("./samples_with_pae.parquet")
+    ids_to_query = pl.read_parquet(
+        "/home/sie/Biocondensates/exp_data/rg_experimental.parquet"
+    )["uniprot_accession"].unique()
 
-    main(uniprot_ids_in=ids_to_query, output_path=output_path, n_flush=200)
+    output_path = Path("./alpha_fold_query_experiment.parquet")
+
+    main(accessions=ids_to_query, output_path=output_path, n_flush=50)
