@@ -11,6 +11,7 @@ from mpipi_lammps_gen.generate_lammps_files import (
     get_lammps_viscous_command,
     parse_cif,
     write_lammps_data_file,
+    trim_protein,
 )
 from mpipi_lammps_gen.globular_domains import decide_globular_domains_from_sequence
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
@@ -29,6 +30,9 @@ class Params:
 
     box_buffer: float = 100.0
 
+    start_idx: int | None = None
+    end_idx: int | None = None
+
 
 def coarse_grain(
     output: Path,
@@ -37,7 +41,6 @@ def coarse_grain(
     plddts: list[float],
     cif_text: str,
 ):
-
     output.mkdir(parents=True, exist_ok=True)
 
     data_file_path = output / "data_file.data"
@@ -48,6 +51,17 @@ def coarse_grain(
     script_path = output / "script.lmp"
 
     protein_data = parse_cif(cif_text=cif_text)
+
+    # Optionally slice up the proteins
+    if params.start_idx is not None or params.end_idx is not None:
+        if params.start_idx is None:
+            params.start_idx = 0
+        if params.end_idx is None:
+            params.end_idx = len(protein_data.sequence_one_letter)
+
+        protein_data = trim_protein(protein_data, params.start_idx, params.end_idx)
+
+        plddts = plddts[params.start_idx : params.end_idx]
 
     globular_domains = decide_globular_domains_from_sequence(
         plddts=plddts,
@@ -123,6 +137,8 @@ if __name__ == "__main__":
         threshold=snakemake.params["threshold"],
         minimum_domain_length=snakemake.params["minimum_domain_length"],
         minimum_idr_length=snakemake.params["minimum_idr_length"],
+        start_idx=snakemake.params.get("sequence_start_idx"),
+        end_idx=snakemake.params.get("sequence_end_idx"),
     )
 
     coarse_grain(
