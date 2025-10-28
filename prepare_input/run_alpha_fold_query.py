@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Iterable
+from typing import Any
 from pathlib import Path
 
 import polars as pl
@@ -9,8 +10,22 @@ from mpipi_lammps_gen import alpha_fold_query
 logger = logging.getLogger(__name__)
 
 
+def find_next_free_file(file: Path, n_max: int = 1000) -> Path:
+    test_name = Path()
+
+    for i in range(1, n_max + 1):
+        test_name = file.with_name(file.with_suffix("").name + f"_{i}").with_suffix(
+            file.suffix
+        )
+        if not test_name.exists():
+            return test_name
+
+    msg = f"Could not find free file within {n_max} attempts. Last attempt `{test_name}`"
+    raise Exception(msg)
+
+
 def save(
-    query_results: Iterable[alpha_fold_query.AlphaFoldQueryResult],
+    query_results: Iterable[Any],
     output_path: Path,
 ):
     if query_results == 0:
@@ -25,30 +40,33 @@ def save(
 
     # If something already exists at the output path we try to read it in as a dataframe
     if output_path.exists():
+        logger.info(f"`{output_path}` exists. Trying to read as parquet.")
         try:
             df_out_old = pl.read_parquet(output_path)
+            logger.info(f"... success! There are {len(df_out_old)} rows in the df")
         except Exception as e:
             df_out_old = None
+            logger.exception("... failed!", stack_info=True)
     else:
         df_out_old = None
 
     if df_out_old is None:
         df_out = df_out_new
     else:
+        logger.info("Trying to concat dataframes.")
         try:
             # In case we could read it in as a dataframe, we try to concatenate the two frames
-            df_out = pl.concat((df_out_old, df_out_new))
+            df_out = pl.concat((df_out_old, df_out_new), how="vertical_relaxed")
+            logger.info("... success!")
         except Exception as e:
             # If the concatenation fails, we change the output path so that we do not lose the old data
             df_out = df_out_new
+            output_path = find_next_free_file(output_path)
             logger.exception(
                 "Cannot concatenate data frames. Changing output path to not overwrite data"
             )
-            output_path = output_path.with_name(
-                output_path.with_suffix("").name + "_new"
-            ).with_suffix(output_path.suffix)
 
-    logger.info(f"Saving to {output_path}")
+    logger.info(f"Saving {len(df_out)} rows to `{output_path}`")
     df_out.write_parquet(output_path)
 
 
