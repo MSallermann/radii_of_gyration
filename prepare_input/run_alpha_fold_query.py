@@ -112,4 +112,8 @@ if __name__ == "__main__":
 
     output_path = Path("./alpha_fold_query_experiment.parquet")
 
+    ids_to_query = set(ids_to_query).difference(
+        pl.read_parquet(output_path)["accession"]
+    )
+
     main(accessions=ids_to_query, output_path=output_path, n_flush=50)
