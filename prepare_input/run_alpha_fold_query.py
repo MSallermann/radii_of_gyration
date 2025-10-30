@@ -86,10 +86,13 @@ def main(accessions: Iterable[str], output_path: Path, n_flush: int = 100):
             query_results.extend(query_result)
 
         if idx != 0 and idx % n_flush == 0:
-            save(query_results=query_results, output_path=output_path)
+            save(
+                query_results=query_results,
+                output_path=find_next_free_file(output_path),
+            )
             query_results = []
 
-    save(query_results=query_results, output_path=output_path)
+    save(query_results=query_results, output_path=find_next_free_file(output_path))
 
 
 if __name__ == "__main__":
