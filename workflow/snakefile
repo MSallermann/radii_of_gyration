@@ -3,27 +3,22 @@ from pathlib import Path
 import itertools
 import json
 
-
 configfile: "config.yml"
-
 
 DATA_BASE = pl.read_parquet(config["database_file"])
 
 with open("./samples.json", "rb") as f:
     SAMPLES = json.load(f)
 
-
 # Function to get the plddts from the database
 def get_plddts(wc):
     accession = SAMPLES[wc.sample]["accession"]
     return DATA_BASE.filter(pl.col("accession") == accession)["plddts"][0]
 
-
 # Function to get the cif from the database
 def get_cif(wc):
     accession = SAMPLES[wc.sample]["accession"]
     return DATA_BASE.filter(pl.col("accession") == accession)["cif_text"][0]
-
 
 # sample wild card to temperature
 def get_temp(wc):
