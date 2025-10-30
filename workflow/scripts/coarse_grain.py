@@ -30,29 +30,28 @@ from mpipi_lammps_gen.render_jinja2 import render_jinja2
 
 @dataclass
 class Params:
-    temp: float = 293.0
-    ionic_strength: float = 150.0
-    n_steps: int = int(10e6)
-    timestep: float = 10.0
+    temp: float
+    ionic_strength: float
+    n_steps: int
+    timestep: float
 
     #### criterion
-
     # the plddts threshold
-    threshold: float = 70.0
+    threshold: float
     # the minimum length of a domain in the sequence based criterion
-    minimum_domain_length: int = 3
+    minimum_domain_length: int
     # the minimum lenght of an IDR between two domains in the sequence based criterion
-    minimum_idr_length: int = 3
+    minimum_idr_length: int
     # if the minimum pae between a pair of groups is below this, they are merged
-    min_pae_cutoff: float | None = None
+    min_pae_cutoff: float | None
     # if the mean pae between a pair of groups is below this, they are merged
-    mean_pae_cutoff: float | None = None
+    mean_pae_cutoff: float | None
     # if the minimum distance between a pair of groups is below this, they are merged
-    min_distance_cutoff: float | None = None
+    min_distance_cutoff: float | None
     # if the maximum coordination number between a pair of groups is greater than or equal to this, they are merged
-    max_coordination_cutoff: int | None = None
+    max_coordination_cutoff: int | None
     # the distance cutoff used to compute coordination numbers
-    coordination_distance_cutoff: float | None = None
+    coordination_distance_cutoff: float | None
 
     box_buffer: float = 100.0
 
@@ -158,8 +157,8 @@ def coarse_grain(
                     cutoff=params.coordination_distance_cutoff,
                 )
                 if (
-                    coord1 >= params.max_coordination_cutoff
-                    or coord2 >= params.max_coordination_cutoff
+                    np.max(coord1) >= params.max_coordination_cutoff
+                    or np.max(coord2) >= params.max_coordination_cutoff
                 ):
                     return True
 
@@ -236,14 +235,27 @@ if __name__ == "__main__":
         threshold=snakemake.params["threshold"],
         minimum_domain_length=snakemake.params["minimum_domain_length"],
         minimum_idr_length=snakemake.params["minimum_idr_length"],
-        start_idx=snakemake.params.get("sequence_start_idx"),
-        end_idx=snakemake.params.get("sequence_end_idx"),
+        start_idx=snakemake.params.get("start_idx"),
+        end_idx=snakemake.params.get("end_idx"),
+        min_pae_cutoff=snakemake.params.get("min_pae_cutoff"),
+        mean_pae_cutoff=snakemake.params.get("mean_pae_cutoff"),
+        min_distance_cutoff=snakemake.params.get("min_distance_cutoff"),
+        max_coordination_cutoff=snakemake.params.get("max_coordination_cutoff"),
+        coordination_distance_cutoff=snakemake.params.get(
+            "coordination_distance_cutoff"
+        ),
     )
+
+    protein_data_dict = snakemake.params.get("protein_data_dict")
+
+    if protein_data_dict is None:
+        protein_data = parse_cif(snakemake.params["cif_text"])
+    else:
+        protein_data = ProteinData(**protein_data_dict)
 
     coarse_grain(
         output=Path(snakemake.output[0]),
         params=params,
         template_file=template_file,
-        plddts=plddts,
-        cif_text=snakemake.params["cif_text"],
+        protein_data=protein_data,
     )

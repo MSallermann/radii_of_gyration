@@ -29,15 +29,19 @@ def get_cif(wc):
 def get_temp(wc):
     return SAMPLES[wc.sample]["temperature"]
 
-
 # sample wild card to ionic strength
 def get_ionic_strength(wc):
     return SAMPLES[wc.sample]["ionic_strength"]
 
-
 # sample wild card to threshold
 def get_threshold(wc):
     return SAMPLES[wc.sample]["threshold"]
+
+def get_start_idx(wc):
+    return SAMPLES[wc.sample].get("start_idx")
+
+def get_end_idx(wc):
+    return SAMPLES[wc.sample].get("end_idx")
 
 
 N_STEPS = config["n_steps"]
@@ -47,6 +51,12 @@ MINIMUM_IDR_LENGTH = config["minimum_idr_length"]
 LAMMPS_BIN = config["lammps_binary"]
 RG_SKIP = config["rg_skip"]
 
+# geometric criterion (these are all optional)
+MIN_PAE_CUTOFF = config.get("min_pae_cutoff")
+MEAN_PAE_CUTOFF = config.get("mean_pae_cutoff")
+MIN_DISTANCE_CUTOFF = config.get("min_distance_cutoff")
+MAX_COORDINATION_CUTOFF = config.get("max_coordination_cutoff")
+COORDINATION_DISTANCE_CUTOFF = config.get("coordination_distance_cutoff")
 
 rule all:
     input:
@@ -71,6 +81,14 @@ rule prepare_coarse_grained_inputs:
         minimum_idr_length=MINIMUM_IDR_LENGTH,
         plddts=get_plddts,
         cif_text=get_cif,
+        min_pae_cutoff = MIN_PAE_CUTOFF,
+        mean_pae_cutoff = MEAN_PAE_CUTOFF,
+        min_distance_cutoff = MIN_DISTANCE_CUTOFF,
+        max_coordination_cutoff = MAX_COORDINATION_CUTOFF,
+        coordination_distance_cutoff = COORDINATION_DISTANCE_CUTOFF,
+        start_idx=get_start_idx,
+        end_idx=get_end_idx
+
     script:
         workflow.source_path("scripts/coarse_grain.py")
 
@@ -89,7 +107,7 @@ rule run_lammps:
     shell:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
-        f"srun {LAMMPS_BIN} -in script.lmp\n"
+        f"{LAMMPS_BIN} -in script.lmp\n"
 
 
 rule average_radius_of_gyration:
