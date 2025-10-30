@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from mpipi_lammps_gen.generate_lammps_files import (
     generate_lammps_data,
     get_lammps_group_definition,
@@ -12,8 +14,17 @@ from mpipi_lammps_gen.generate_lammps_files import (
     parse_cif,
     write_lammps_data_file,
     trim_protein,
+    ProteinData,
 )
-from mpipi_lammps_gen.globular_domains import decide_globular_domains_from_sequence
+from mpipi_lammps_gen.util import (
+    coordination_numbers_from_distance_matrix,
+    group_distance_matrix,
+)
+from mpipi_lammps_gen.globular_domains import (
+    decide_globular_domains_from_sequence,
+    merge_domains,
+    GlobularDomain,
+)
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
 
 
@@ -24,12 +35,28 @@ class Params:
     n_steps: int = int(10e6)
     timestep: float = 10.0
 
+    #### criterion
+
+    # the plddts threshold
     threshold: float = 70.0
+    # the minimum length of a domain in the sequence based criterion
     minimum_domain_length: int = 3
+    # the minimum lenght of an IDR between two domains in the sequence based criterion
     minimum_idr_length: int = 3
+    # if the minimum pae between a pair of groups is below this, they are merged
+    min_pae_cutoff: float | None = None
+    # if the mean pae between a pair of groups is below this, they are merged
+    mean_pae_cutoff: float | None = None
+    # if the minimum distance between a pair of groups is below this, they are merged
+    min_distance_cutoff: float | None = None
+    # if the maximum coordination number between a pair of groups is greater than or equal to this, they are merged
+    max_coordination_cutoff: int | None = None
+    # the distance cutoff used to compute coordination numbers
+    coordination_distance_cutoff: float | None = None
 
     box_buffer: float = 100.0
 
+    # slicing up the sequence
     start_idx: int | None = None
     end_idx: int | None = None
 
@@ -38,9 +65,17 @@ def coarse_grain(
     output: Path,
     params: Params,
     template_file: Path,
-    plddts: list[float],
-    cif_text: str,
+    protein_data: ProteinData | None,
+    cif_text: str | None = None,
 ):
+    if protein_data is None and cif_text is None:
+        raise Exception("Protein data and cif_text cannot both be None")
+
+    if protein_data is None and cif_text is not None:
+        protein_data = parse_cif(cif_text)
+
+    assert protein_data is not None  # this is mainly for pyright
+
     output.mkdir(parents=True, exist_ok=True)
 
     data_file_path = output / "data_file.data"
@@ -49,8 +84,6 @@ def coarse_grain(
     workdir.mkdir(exist_ok=True)
 
     script_path = output / "script.lmp"
-
-    protein_data = parse_cif(cif_text=cif_text)
 
     # Optionally slice up the proteins
     if params.start_idx is not None or params.end_idx is not None:
@@ -61,14 +94,80 @@ def coarse_grain(
 
         protein_data = trim_protein(protein_data, params.start_idx, params.end_idx)
 
-        plddts = plddts[params.start_idx : params.end_idx]
-
+    # Decide groups based on sequence
+    assert protein_data.plddts is not None
     globular_domains = decide_globular_domains_from_sequence(
-        plddts=plddts,
+        plddts=protein_data.plddts,
         threshold=params.threshold,
         minimum_domain_length=params.minimum_domain_length,
         minimum_idr_length=params.minimum_idr_length,
     )
+
+    # Merge groups based on PAE
+    if params.min_pae_cutoff is not None or params.mean_pae_cutoff is not None:
+        assert protein_data.pae is not None
+
+        pae_matrix_arr = np.array(protein_data.pae)
+
+        def merge_based_on_pae(g1: GlobularDomain, g2: GlobularDomain) -> bool:
+            sub_pae = pae_matrix_arr[
+                g1.start_idx() : g1.end_idx(), g2.start_idx() : g2.end_idx()
+            ]
+
+            min_pae = np.min(np.ravel(sub_pae))
+
+            if params.min_pae_cutoff is not None and min_pae < params.min_pae_cutoff:
+                return True
+
+            mean_pae = np.mean(np.ravel(sub_pae))
+
+            if params.mean_pae_cutoff is not None and mean_pae < params.mean_pae_cutoff:
+                return True
+
+            return False
+
+        globular_domains = merge_domains(
+            globular_domains, should_be_merged=merge_based_on_pae
+        )
+
+    # Merge groups based on distance
+    if (
+        params.min_distance_cutoff is not None
+        or params.max_coordination_cutoff is not None
+    ):
+        # if we want to look at the coordination numbers we also need the cutoff for that
+        if params.max_coordination_cutoff is not None:
+            assert params.coordination_distance_cutoff is not None
+
+        residue_positions = protein_data.get_residue_positions()
+
+        def merge_based_on_distance(g1: GlobularDomain, g2: GlobularDomain) -> bool:
+            distance_matrix = group_distance_matrix(residue_positions, g1, g2)
+
+            if params.min_distance_cutoff is not None:
+                min_distance = np.min(np.ravel(distance_matrix))
+                if min_distance <= params.min_distance_cutoff:
+                    return True
+
+            if (
+                params.max_coordination_cutoff is not None
+                and params.coordination_distance_cutoff is not None
+            ):
+                coord1, coord2 = coordination_numbers_from_distance_matrix(
+                    distance_matrix=distance_matrix,
+                    cutoff=params.coordination_distance_cutoff,
+                )
+                if (
+                    coord1 >= params.max_coordination_cutoff
+                    or coord2 >= params.max_coordination_cutoff
+                ):
+                    return True
+
+            return False
+
+        globular_domains = merge_domains(
+            globular_domains, should_be_merged=merge_based_on_distance
+        )
 
     lammps_data = generate_lammps_data(
         protein_data, globular_domains, box_buffer=params.box_buffer
