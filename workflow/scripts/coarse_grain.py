@@ -225,8 +225,6 @@ if __name__ == "__main__":
 
     template_file = snakemake.input["template_file"]
 
-    plddts = snakemake.params["plddts"]
-
     params = Params(
         temp=snakemake.params["temp"],
         ionic_strength=snakemake.params["ionic_strength"],
@@ -246,7 +244,7 @@ if __name__ == "__main__":
         ),
     )
 
-    protein_data_dict = snakemake.params.get("protein_data_dict")
+    protein_data_dict = snakemake.params.get("prot_data")
 
     if protein_data_dict is None:
         protein_data = parse_cif(snakemake.params["cif_text"])

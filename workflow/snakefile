@@ -5,20 +5,27 @@ import json
 
 configfile: "config.yml"
 
-DATA_BASE = pl.read_parquet(config["database_file"])
+DATA_BASE = pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
 
-with open("./samples.json", "rb") as f:
-    SAMPLES = json.load(f)
+def get_db_row(wc):
+    key = wc.sample
+    db_filtered = DATA_BASE.filter(pl.col("key") == key)
 
-# Function to get the plddts from the database
-def get_plddts(wc):
-    accession = SAMPLES[wc.sample]["accession"]
-    return DATA_BASE.filter(pl.col("accession") == accession)["plddts"][0]
+    if len(db_filtered) != 1:
+        msg = f"The key '{key}', has {len(db_filtered)} entries in the database. For correct operation, it needs to be *exactly* one!"
+        raise Exception(msg)
+
+    return db_filtered.row(0, named=True)
 
 # Function to get the cif from the database
 def get_cif(wc):
-    accession = SAMPLES[wc.sample]["accession"]
-    return DATA_BASE.filter(pl.col("accession") == accession)["cif_text"][0]
+    return get_db_row(wc).get("cif_text")
+
+def get_prot_data(wc):
+    return get_db_row(wc).get("prot_data")
+   
+with open("./samples.json", "rb") as f:
+    SAMPLES = json.load(f)
 
 # sample wild card to temperature
 def get_temp(wc):
@@ -74,8 +81,8 @@ rule prepare_coarse_grained_inputs:
         threshold=get_threshold,
         minimum_domain_length=MINIMUM_DOMAIN_LENGTH,
         minimum_idr_length=MINIMUM_IDR_LENGTH,
-        plddts=get_plddts,
         cif_text=get_cif,
+        prot_data=get_prot_data,
         min_pae_cutoff = MIN_PAE_CUTOFF,
         mean_pae_cutoff = MEAN_PAE_CUTOFF,
         min_distance_cutoff = MIN_DISTANCE_CUTOFF,
@@ -123,7 +130,7 @@ rule aggregate_rg:
         [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={
-            "accession": [SAMPLES[sample]["accession"] for sample in SAMPLES.keys()],
+            "key" : list(SAMPLES.keys()),
             "threshold": [SAMPLES[sample]["threshold"] for sample in SAMPLES.keys()],
             "temperature": [
                 SAMPLES[sample]["temperature"] for sample in SAMPLES.keys()
