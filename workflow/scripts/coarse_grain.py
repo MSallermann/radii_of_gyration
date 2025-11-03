@@ -5,6 +5,10 @@ from typing import Any
 
 import numpy as np
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from mpipi_lammps_gen.generate_lammps_files import (
     generate_lammps_data,
     get_lammps_group_definition,
@@ -139,6 +143,7 @@ def coarse_grain(
             assert params.coordination_distance_cutoff is not None
 
         residue_positions = protein_data.get_residue_positions()
+        assert residue_positions is not None
 
         def merge_based_on_distance(g1: GlobularDomain, g2: GlobularDomain) -> bool:
             distance_matrix = group_distance_matrix(residue_positions, g1, g2)
