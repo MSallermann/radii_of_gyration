@@ -95,7 +95,9 @@ def coarse_grain(
         if params.end_idx is None:
             params.end_idx = len(protein_data.sequence_one_letter)
 
-        protein_data = trim_protein(protein_data, params.start_idx, params.end_idx)
+        protein_data = trim_protein(
+            protein_data, params.start_idx - 1, params.end_idx - 1
+        )
 
     # Decide groups based on sequence
     assert protein_data.plddts is not None
