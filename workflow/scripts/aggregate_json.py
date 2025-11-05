@@ -26,7 +26,7 @@ def main(
         if added_columns is not None:
             for k in added_columns:
                 item = added_columns[k][idx]
-                record["k"] = item
+                record[k] = item
 
         if ignore_keys is not None:
             for k in ignore_keys:

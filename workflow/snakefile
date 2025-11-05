@@ -8,11 +8,11 @@ configfile: "config.yml"
 DATA_BASE = pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
 
 def get_db_row(wc):
-    key = wc.sample
+    key = SAMPLES[wc.sample]["db_key"]
     db_filtered = DATA_BASE.filter(pl.col("key") == key)
 
     if len(db_filtered) != 1:
-        msg = f"The key '{key}', has {len(db_filtered)} entries in the database. For correct operation, it needs to be *exactly* one!"
+        msg = f"The key '{key}' has {len(db_filtered)} entries in the database. For correct operation, it needs to be *exactly* one!"
         raise Exception(msg)
 
     return db_filtered.row(0, named=True)
@@ -48,8 +48,8 @@ def get_end_idx(wc):
 
 N_STEPS = config["n_steps"]
 TIMESTEP = config["timestep"]
-MINIMUM_DOMAIN_LENGTH = config["minimum_domain_length"]
-MINIMUM_IDR_LENGTH = config["minimum_idr_length"]
+MINIMUM_DOMAIN_LENGTH = config.get("minimum_domain_length", 0)
+MINIMUM_IDR_LENGTH = config.get("minimum_idr_length", 0)
 LAMMPS_BIN = config["lammps_binary"]
 RG_SKIP = config["rg_skip"]
 
@@ -104,11 +104,13 @@ rule run_lammps:
     resources:
         nodes=1,
         n_tasks_per_node=1,
-        slurm_out=lambda wc: f"results/lammps_files/{wc.sample}.out",
-        slurm_err=lambda wc: f"results/lammps_files/{wc.sample}.err",
+        cpus_per_task=2,
+        slurm_out=lambda wc: f"results/lammps_files/{wc.sample}/slurm.out",
+        slurm_err=lambda wc: f"results/lammps_files/{wc.sample}/slurm.err",
     shell:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
+        "export OMP_NUM_THREADS={resources.cpus_per_task}\n"
         f"{LAMMPS_BIN} -in script.lmp\n"
 
 
@@ -123,21 +125,21 @@ rule average_radius_of_gyration:
     script:
         workflow.source_path("scripts/average_radius_of_gyration.py")
 
+### This last rule simply tries to collect all rg values
+KEYS = set( )
+for samp in SAMPLES.values():
+    KEYS.update(samp.keys())
 
+added_columns = {
+    key : [sample.get(key) for sample in SAMPLES.values()] for key in KEYS
+}
 rule aggregate_rg:
     localrule: True
     input:
         [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={
-            "key" : list(SAMPLES.keys()),
-            "threshold": [SAMPLES[sample]["threshold"] for sample in SAMPLES.keys()],
-            "temperature": [
-                SAMPLES[sample]["temperature"] for sample in SAMPLES.keys()
-            ],
-            "ionic_strength": [
-                SAMPLES[sample]["ionic_strength"] for sample in SAMPLES.keys()
-            ],
+            added_columns
         },
         ignore_columns=["file"],
     output:
