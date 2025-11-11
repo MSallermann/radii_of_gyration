@@ -71,6 +71,7 @@ rule prepare_coarse_grained_inputs:
         template_file=ancient(
             Path(workflow.source_path("templates/rg_script.lmp.jinja"))
         ),
+    threads: 1
     output:
         directory("results/lammps_files/{sample}"),
     params:
@@ -95,16 +96,27 @@ rule prepare_coarse_grained_inputs:
         workflow.source_path("scripts/coarse_grain.py")
 
 
+def get_n_threads(wildcards):
+
+    start_idx = get_start_idx(wildcards)
+    end_idx = get_start_idx(wildcards)
+    n_res = end_idx - start_idx
+    n_threads = n_res // 100 + 1
+
+    return int(min(max(1, n_threads), 12))
+
 rule run_lammps:
     input:
         "results/lammps_files/{sample}",
     output:
         folder=directory("results/lammps_runs/{sample}"),
         gyration="results/lammps_runs/{sample}/gyration.out",
+    threads:
+        get_n_threads
     resources:
         nodes=1,
         n_tasks_per_node=1,
-        cpus_per_task=2,
+        cpus_per_task=get_n_threads,
         slurm_out=lambda wc: f"results/lammps_files/{wc.sample}/slurm.out",
         slurm_err=lambda wc: f"results/lammps_files/{wc.sample}/slurm.err",
     shell:
@@ -139,7 +151,7 @@ rule aggregate_rg:
         [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={
-            added_columns
+            **added_columns
         },
         ignore_columns=["file"],
     output:
