@@ -71,6 +71,7 @@ rule prepare_coarse_grained_inputs:
         template_file=ancient(
             Path(workflow.source_path("templates/rg_script.lmp.jinja"))
         ),
+    shadow: "copy-minimal"
     threads: 1
     output:
         directory("results/lammps_files/{sample}"),
@@ -99,11 +100,11 @@ rule prepare_coarse_grained_inputs:
 def get_n_threads(wildcards):
 
     start_idx = get_start_idx(wildcards)
-    end_idx = get_start_idx(wildcards)
+    end_idx = get_end_idx(wildcards)
     n_res = end_idx - start_idx
-    n_threads = n_res // 100 + 1
+    n_threads = n_res // 150 + 1
 
-    return int(min(max(1, n_threads), 12))
+    return int(min(max(1, n_threads), 6))
 
 rule run_lammps:
     input:
@@ -123,7 +124,7 @@ rule run_lammps:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
         "export OMP_NUM_THREADS={resources.cpus_per_task}\n"
-        f"{LAMMPS_BIN} -in script.lmp\n"
+        f"{LAMMPS_BIN} -in script.lmp 1> /dev/null 2> /dev/null\n"
 
 
 rule average_radius_of_gyration:
@@ -147,6 +148,7 @@ added_columns = {
 }
 rule aggregate_rg:
     localrule: True
+    threads: 1
     input:
         [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
