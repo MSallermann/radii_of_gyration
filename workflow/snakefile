@@ -3,9 +3,14 @@ from pathlib import Path
 import itertools
 import json
 
+
 configfile: "config.yml"
 
-DATA_BASE = pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
+
+DATA_BASE = (
+    pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
+)
+
 
 def get_db_row(wc):
     key = SAMPLES[wc.sample]["db_key"]
@@ -17,30 +22,38 @@ def get_db_row(wc):
 
     return db_filtered.row(0, named=True)
 
+
 # Function to get the cif from the database
 def get_cif(wc):
     return get_db_row(wc).get("cif_text")
 
+
 def get_prot_data(wc):
     return get_db_row(wc).get("prot_data")
-   
+
+
 with open("./samples.json", "rb") as f:
     SAMPLES = json.load(f)
+
 
 # sample wild card to temperature
 def get_temp(wc):
     return SAMPLES[wc.sample]["temperature"]
 
+
 # sample wild card to ionic strength
 def get_ionic_strength(wc):
     return SAMPLES[wc.sample]["ionic_strength"]
+
 
 # sample wild card to threshold
 def get_threshold(wc):
     return SAMPLES[wc.sample]["threshold"]
 
+
 def get_start_idx(wc):
     return SAMPLES[wc.sample].get("start_idx")
+
 
 def get_end_idx(wc):
     return SAMPLES[wc.sample].get("end_idx")
@@ -52,6 +65,7 @@ MINIMUM_DOMAIN_LENGTH = config.get("minimum_domain_length", 0)
 MINIMUM_IDR_LENGTH = config.get("minimum_idr_length", 0)
 LAMMPS_BIN = config["lammps_binary"]
 RG_SKIP = config["rg_skip"]
+BOX_BUFFER = config.get("box_buffer")
 
 # geometric criterion (these are all optional)
 MIN_PAE_CUTOFF = config.get("min_pae_cutoff")
@@ -59,6 +73,8 @@ MEAN_PAE_CUTOFF = config.get("mean_pae_cutoff")
 MIN_DISTANCE_CUTOFF = config.get("min_distance_cutoff")
 MAX_COORDINATION_CUTOFF = config.get("max_coordination_cutoff")
 COORDINATION_DISTANCE_CUTOFF = config.get("coordination_distance_cutoff")
+TEMPLATE_FILE = config["template_file"]
+
 
 rule all:
     input:
@@ -68,10 +84,9 @@ rule all:
 rule prepare_coarse_grained_inputs:
     localrule: True
     input:
-        template_file=ancient(
-            Path(workflow.source_path("templates/rg_script.lmp.jinja"))
-        ),
-    shadow: "copy-minimal"
+        template_file=ancient(Path(TEMPLATE_FILE)),
+    shadow:
+        "copy-minimal"
     threads: 1
     output:
         directory("results/lammps_files/{sample}"),
@@ -85,26 +100,32 @@ rule prepare_coarse_grained_inputs:
         minimum_idr_length=MINIMUM_IDR_LENGTH,
         cif_text=get_cif,
         prot_data=get_prot_data,
-        min_pae_cutoff = MIN_PAE_CUTOFF,
-        mean_pae_cutoff = MEAN_PAE_CUTOFF,
-        min_distance_cutoff = MIN_DISTANCE_CUTOFF,
-        max_coordination_cutoff = MAX_COORDINATION_CUTOFF,
-        coordination_distance_cutoff = COORDINATION_DISTANCE_CUTOFF,
+        min_pae_cutoff=MIN_PAE_CUTOFF,
+        mean_pae_cutoff=MEAN_PAE_CUTOFF,
+        min_distance_cutoff=MIN_DISTANCE_CUTOFF,
+        max_coordination_cutoff=MAX_COORDINATION_CUTOFF,
+        coordination_distance_cutoff=COORDINATION_DISTANCE_CUTOFF,
+        box_buffer=BOX_BUFFER,
         start_idx=get_start_idx,
-        end_idx=get_end_idx
-
+        end_idx=get_end_idx,
     script:
         workflow.source_path("scripts/coarse_grain.py")
 
 
 def get_n_threads(wildcards):
-
     start_idx = get_start_idx(wildcards)
     end_idx = get_end_idx(wildcards)
-    n_res = end_idx - start_idx
-    n_threads = n_res // 150 + 1
 
+    if start_idx is not None and end_idx is not None:
+        n_res = end_idx - start_idx
+    elif (prot_data := get_prot_data(wildcards)) is not None:
+        n_res = len(prot_data["sequence_one_letter"])
+    else:
+        return 1
+
+    n_threads = n_res // 150 + 1
     return int(min(max(1, n_threads), 6))
+
 
 rule run_lammps:
     input:
@@ -112,8 +133,7 @@ rule run_lammps:
     output:
         folder=directory("results/lammps_runs/{sample}"),
         gyration="results/lammps_runs/{sample}/gyration.out",
-    threads:
-        get_n_threads
+    threads: get_n_threads
     resources:
         nodes=1,
         n_tasks_per_node=1,
@@ -138,23 +158,22 @@ rule average_radius_of_gyration:
     script:
         workflow.source_path("scripts/average_radius_of_gyration.py")
 
+
 ### This last rule simply tries to collect all rg values
-KEYS = set( )
+KEYS = set()
 for samp in SAMPLES.values():
     KEYS.update(samp.keys())
 
-added_columns = {
-    key : [sample.get(key) for sample in SAMPLES.values()] for key in KEYS
-}
+added_columns = {key: [sample.get(key) for sample in SAMPLES.values()] for key in KEYS}
+
+
 rule aggregate_rg:
     localrule: True
     threads: 1
     input:
         [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
-        add_columns={
-            **added_columns
-        },
+        add_columns={**added_columns},
         ignore_columns=["file"],
     output:
         "results/aggregated_rg.csv",

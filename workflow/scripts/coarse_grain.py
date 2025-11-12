@@ -57,7 +57,7 @@ class Params:
     # the distance cutoff used to compute coordination numbers
     coordination_distance_cutoff: float | None
 
-    box_buffer: float | None = 1000.0
+    box_buffer: float | None = 100.0
 
     # slicing up the sequence
     start_idx: int | None = None
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         coordination_distance_cutoff=snakemake.params.get(
             "coordination_distance_cutoff"
         ),
-        box_buffer=snakemake.params.get("box_buffer", 1000.0),
+        box_buffer=snakemake.params.get("box_buffer", 100.0),
     )
 
     protein_data_dict = snakemake.params.get("prot_data")
