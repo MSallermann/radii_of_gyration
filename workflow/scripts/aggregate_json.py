@@ -1,14 +1,14 @@
 import json
 from pathlib import Path
-
+from collections.abc import Iterable
 import pandas as pd
 
 
 def main(
-    input_paths: list[Path | str],
+    input_paths: Iterable[Path | str],
     output_path: Path | str,
     added_columns: dict | None = None,
-    ignore_keys: list[str] | None = None,
+    ignore_keys: Iterable[str] | None = None,
 ):
     output_path = Path(output_path)
     data = []
@@ -24,9 +24,9 @@ def main(
             record = {"file": None}
 
         if added_columns is not None:
-            for k in added_columns:
-                item = added_columns[k][idx]
-                record[k] = item
+            for key in added_columns:
+                item = added_columns[key][idx]
+                record[key] = item
 
         if ignore_keys is not None:
             for k in ignore_keys:
