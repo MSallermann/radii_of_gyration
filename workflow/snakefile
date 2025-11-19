@@ -123,8 +123,8 @@ def get_n_threads(wildcards):
     else:
         return 1
 
-    n_threads = n_res // 150 + 1
-    return int(min(max(1, n_threads), 6))
+    n_threads = n_res // 300 + 1
+    return int(min(max(2, n_threads), 6))
 
 
 rule run_lammps:
@@ -136,8 +136,8 @@ rule run_lammps:
     threads: get_n_threads
     resources:
         nodes=1,
-        n_tasks_per_node=1,
-        cpus_per_task=get_n_threads,
+        ntasks_per_node=get_n_threads,
+        cpus_per_task=1,
         slurm_out=lambda wc: f"results/lammps_files/{wc.sample}/slurm.out",
         slurm_err=lambda wc: f"results/lammps_files/{wc.sample}/slurm.err",
     shell:
