@@ -3,14 +3,59 @@ from pathlib import Path
 import itertools
 import json
 
-
 configfile: "config.yml"
 
+######################################################################
+#### The database file from which the prot_data dicts are read in ####
+######################################################################
 
 DATA_BASE = (
     pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
 )
 
+######################################################################
+# Parse some information from the config.yml.file
+######################################################################
+
+# The command to invoke lammps. May be as simple as `lmp`, but can also be more complicated e.g. `srun --ntasks {resources.ntasks} path/to/lmp`
+LAMMPS_BIN = config["lammps_binary"]
+
+# The jinja template file to be used for the lammps script
+TEMPLATE_FILE = config["template_file"]
+
+# Number of simulation steps in the final nvt run
+N_STEPS = config["n_steps"]
+TIMESTEP = config["timestep"]
+RG_SKIP = config["rg_skip"]
+BOX_BUFFER = config["box_buffer"]
+
+# Sequence globular domain criterion
+MINIMUM_DOMAIN_LENGTH = config.get("minimum_domain_length", 0)
+MINIMUM_IDR_LENGTH = config.get("minimum_idr_length", 0)
+
+# Geometric globular domain criterion (these are all optional)
+MIN_PAE_CUTOFF = config.get("min_pae_cutoff")
+MEAN_PAE_CUTOFF = config.get("mean_pae_cutoff")
+MIN_DISTANCE_CUTOFF = config.get("min_distance_cutoff")
+MAX_COORDINATION_CUTOFF = config.get("max_coordination_cutoff")
+COORDINATION_DISTANCE_CUTOFF = config.get("coordination_distance_cutoff")
+
+# Globular domain interactions
+GLOB_GLOB_SCALING = config["glob_glob_scaling"]
+IDR_GLOB_SCALING = config["idr_glob_scaling"]
+
+######################################################################
+# Read in the samples file
+######################################################################
+
+SAMPLES_PATH = config.get("samples_file", "samples.json")
+
+with open("./samples.json", "rb") as f:
+    SAMPLES = json.load(f)
+
+######################################################################
+# Define some utility functions
+######################################################################
 
 def get_db_row(wc):
     key = SAMPLES[wc.sample]["db_key"]
@@ -30,10 +75,6 @@ def get_cif(wc):
 
 def get_prot_data(wc):
     return get_db_row(wc).get("prot_data")
-
-
-with open("./samples.json", "rb") as f:
-    SAMPLES = json.load(f)
 
 
 # sample wild card to temperature
@@ -57,23 +98,6 @@ def get_start_idx(wc):
 
 def get_end_idx(wc):
     return SAMPLES[wc.sample].get("end_idx")
-
-
-N_STEPS = config["n_steps"]
-TIMESTEP = config["timestep"]
-MINIMUM_DOMAIN_LENGTH = config.get("minimum_domain_length", 0)
-MINIMUM_IDR_LENGTH = config.get("minimum_idr_length", 0)
-LAMMPS_BIN = config["lammps_binary"]
-RG_SKIP = config["rg_skip"]
-BOX_BUFFER = config.get("box_buffer")
-
-# geometric criterion (these are all optional)
-MIN_PAE_CUTOFF = config.get("min_pae_cutoff")
-MEAN_PAE_CUTOFF = config.get("mean_pae_cutoff")
-MIN_DISTANCE_CUTOFF = config.get("min_distance_cutoff")
-MAX_COORDINATION_CUTOFF = config.get("max_coordination_cutoff")
-COORDINATION_DISTANCE_CUTOFF = config.get("coordination_distance_cutoff")
-TEMPLATE_FILE = config["template_file"]
 
 
 rule all:
@@ -108,8 +132,10 @@ rule prepare_coarse_grained_inputs:
         box_buffer=BOX_BUFFER,
         start_idx=get_start_idx,
         end_idx=get_end_idx,
+        glob_glob_scaling=GLOB_GLOB_SCALING,
+        idr_glob_scaling=IDR_GLOB_SCALING
     script:
-        workflow.source_path("scripts/coarse_grain.py")
+        workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
 
 def get_n_threads(wildcards):
