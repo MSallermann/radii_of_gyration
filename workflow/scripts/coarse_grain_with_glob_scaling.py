@@ -262,6 +262,7 @@ if __name__ == "__main__":
 
     protein_data_dict = snakemake.params["prot_data"]
     protein_data = ProteinData(**protein_data_dict)
+    protein_data.compute_residue_positions()
 
     lammps_data = create_lammps_data(params, protein_data)
 

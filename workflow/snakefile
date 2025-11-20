@@ -6,12 +6,18 @@ import json
 configfile: "config.yml"
 
 ######################################################################
-#### The database file from which the prot_data dicts are read in ####
+# The database file from which the prot_data dicts are read in 
 ######################################################################
 
-DATA_BASE = (
-    pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
-)
+database_file = Path(config["database_file"])
+if database_file.suffix == ".parquet":
+    DATA_BASE = (
+        pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
+    )
+else:
+    DATA_BASE = (
+        pl.scan_ipc(config["database_file"]).select("key", "prot_data").collect()
+    )
 
 ######################################################################
 # Parse some information from the config.yml.file
@@ -53,6 +59,21 @@ SAMPLES_PATH = config.get("samples_file", "samples.json")
 with open("./samples.json", "rb") as f:
     SAMPLES = json.load(f)
 
+SAMPLES_START_IDX = int(config.get("samples_start_idx", 0))
+SAMPLES_END_IDX = int(config.get("samples_end_idx", len(SAMPLES)))
+
+print(f"{SAMPLES_START_IDX = }")
+print(f"{SAMPLES_END_IDX = }")
+
+drop_idx = []
+for idx, k in enumerate(SAMPLES):
+    if idx >= SAMPLES_START_IDX and idx<SAMPLES_END_IDX:
+        continue
+    else:
+        drop_idx.append(k)
+
+[SAMPLES.pop(idx) for idx in drop_idx]
+
 ######################################################################
 # Define some utility functions
 ######################################################################
@@ -66,11 +87,6 @@ def get_db_row(wc):
         raise Exception(msg)
 
     return db_filtered.row(0, named=True)
-
-
-# Function to get the cif from the database
-def get_cif(wc):
-    return get_db_row(wc).get("cif_text")
 
 
 def get_prot_data(wc):
@@ -122,7 +138,6 @@ rule prepare_coarse_grained_inputs:
         threshold=get_threshold,
         minimum_domain_length=MINIMUM_DOMAIN_LENGTH,
         minimum_idr_length=MINIMUM_IDR_LENGTH,
-        cif_text=get_cif,
         prot_data=get_prot_data,
         min_pae_cutoff=MIN_PAE_CUTOFF,
         mean_pae_cutoff=MEAN_PAE_CUTOFF,
