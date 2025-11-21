@@ -27,7 +27,7 @@ def aggregate_from_run_folder(run_folder: Path, output_file: Path | None = None)
     aggregate_json.main(
         input_paths=[run_folder / f"results/rg/{sample}/rg.json" for sample in samples],
         output_path=output_file,
-        added_columns={**added_columns},
+        added_columns={**added_columns, "sample_key": list(samples.keys())},
         ignore_keys=["file"],
     )
 
