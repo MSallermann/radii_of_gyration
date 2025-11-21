@@ -50,6 +50,9 @@ COORDINATION_DISTANCE_CUTOFF = config.get("coordination_distance_cutoff")
 GLOB_GLOB_SCALING = config["glob_glob_scaling"]
 IDR_GLOB_SCALING = config["idr_glob_scaling"]
 
+# Residue location
+RESIDUE_LOCATION = config.get("residue_location", "Ca")
+
 ######################################################################
 # Read in the samples file
 ######################################################################
@@ -148,7 +151,8 @@ rule prepare_coarse_grained_inputs:
         start_idx=get_start_idx,
         end_idx=get_end_idx,
         glob_glob_scaling=GLOB_GLOB_SCALING,
-        idr_glob_scaling=IDR_GLOB_SCALING
+        idr_glob_scaling=IDR_GLOB_SCALING,
+        residue_location=RESIDUE_LOCATION
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 

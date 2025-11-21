@@ -262,7 +262,18 @@ if __name__ == "__main__":
 
     protein_data_dict = snakemake.params["prot_data"]
     protein_data = ProteinData(**protein_data_dict)
-    protein_data.compute_residue_positions()
+    assert protein_data.plddts is not None
+    assert protein_data.atom_xyz is not None
+
+    residue_location = snakemake.params.get("residue_location", "Ca")
+    if residue_location == "calvados":
+        method = [
+            "com" if plddt > params.threshold else "Ca" for plddt in protein_data.plddts
+        ]
+    else:
+        method = residue_location
+
+    protein_data.compute_residue_positions(method=method)
 
     lammps_data = create_lammps_data(params, protein_data)
 
