@@ -72,7 +72,7 @@ def save(
     df_out.write_parquet(output_path)
 
 
-def main(accessions: Iterable[str], output_path: Path, n_flush: int = 100):
+def main(accessions: Iterable[str], output_path: Path, n_flush: int = 100, **kwargs):
     query_results = []
 
     accessions_list = list(accessions)
@@ -80,7 +80,7 @@ def main(accessions: Iterable[str], output_path: Path, n_flush: int = 100):
     for idx, a in enumerate(accessions_list):
         logger.info(f"Queried {a} [{idx} / {len(accessions_list)}]")
 
-        query_result = alpha_fold_query.query_alphafold(a)
+        query_result = alpha_fold_query.query_alphafold(a, **kwargs)
 
         if query_result is not None:
             query_results.extend(query_result)
@@ -108,15 +108,26 @@ if __name__ == "__main__":
     )
 
     # ids_to_query = pl.read_parquet("./data_idrs.parquet")["uniprot_id"]
+    # ids_to_query = pl.read_parquet(
+    #     "/home/sie/Biocondensates/exp_data/rg_experimental.parquet"
+    # )["uniprot_accession"].unique()
 
-    ids_to_query = pl.read_parquet(
-        "/home/sie/Biocondensates/exp_data/rg_experimental.parquet"
-    )["uniprot_accession"].unique()
-
-    output_path = Path("./alpha_fold_query_experiment.parquet")
-
-    ids_to_query = set(ids_to_query).difference(
-        pl.read_parquet(output_path)["accession"]
+    ids_to_query = (
+        pl.read_csv(
+            "/home/sie/Biocondensates/prepare_samples_for_rgopt/db_rgopt_test_all_sasbdb_pae.csv"
+        )
+        .select(pl.col("af_id").str.split("-").list.slice(1, 1).list[0])["af_id"]
+        .to_list()
     )
 
-    main(accessions=ids_to_query, output_path=output_path, n_flush=50)
+    output_path = Path("./alpha_fold_query_experiment_rg_opt.parquet")
+
+    print(ids_to_query[:3])
+
+    ids_to_query = set(ids_to_query)
+
+    # .difference(
+    #     pl.read_parquet(output_path)["accession"]
+    # )
+
+    main(accessions=ids_to_query, output_path=output_path, n_flush=50, get_pdb=False)
