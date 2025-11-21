@@ -7,23 +7,38 @@ sys.path.insert(0, script_folder.as_posix())
 import aggregate_json  # type: ignore # noqa: E402
 
 
-def aggregate_from_run_folder(run_folder: Path):
+def aggregate_from_run_folder(run_folder: Path, output_file: Path | None = None):
     with (run_folder / "samples.json").open("rb") as f:
         samples = json.load(f)
 
+    keys = set()
+    for samp in samples.values():
+        keys.update(samp.keys())
+
+    added_columns = {
+        key: [sample.get(key) for sample in samples.values()] for key in keys
+    }
+
+    if output_file is None:
+        output_file = run_folder / "aggregated.csv"
+
+    print(f"Aggregating from {run_folder} to {output_file}")
+
     aggregate_json.main(
         input_paths=[run_folder / f"results/rg/{sample}/rg.json" for sample in samples],
-        output_path=run_folder / "aggregated.csv",
-        added_columns={
-            "accession": [samples[sample]["accession"] for sample in samples],
-            "threshold": [samples[sample]["threshold"] for sample in samples],
-            "temperature": [samples[sample]["temperature"] for sample in samples],
-            "ionic_strength": [samples[sample]["ionic_strength"] for sample in samples],
-        },
+        output_path=output_file,
+        added_columns={**added_columns},
         ignore_keys=["file"],
     )
 
 
 if __name__ == "__main__":
     run_folder = Path("/gpfs/projects/ucm96/moritz/rg_workflow/runs/test100")
-    aggregate_from_run_folder(run_folder)
+
+    for run_folder in Path("/work/e280/e280/moritzsa/rg_opt_runs_55").glob("*"):
+        if run_folder.is_dir():
+            aggregate_from_run_folder(
+                run_folder,
+                output_file=Path("/work/e280/e280/moritzsa/rg_opt_runs_55")
+                / f"{run_folder.name}.csv",
+            )
