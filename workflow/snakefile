@@ -59,7 +59,7 @@ RESIDUE_LOCATION = config.get("residue_location", "Ca")
 
 SAMPLES_PATH = config.get("samples_file", "samples.json")
 
-with open("./samples.json", "rb") as f:
+with open(SAMPLES_PATH, "rb") as f:
     SAMPLES = json.load(f)
 
 SAMPLES_START_IDX = int(config.get("samples_start_idx", 0))
