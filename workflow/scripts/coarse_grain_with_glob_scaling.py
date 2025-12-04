@@ -181,9 +181,7 @@ def create_lammps_files(
 ):
     # First write the data file to the output folder
     data_file_str = write_lammps_data_file(lammps_data)
-
     data_file_path.parent.mkdir(exist_ok=True, parents=True)
-
     with data_file_path.open("w") as f:
         f.write(data_file_str)
 
