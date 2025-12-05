@@ -25,6 +25,8 @@ class CalvadosParams:
     box_buffer: float | None
     prot_data: ProteinData
 
+    rg_skip: int
+
     residues_file: Path
 
 
@@ -81,7 +83,7 @@ def write_calvados_inp_files(output_path: Path, params: CalvadosParams):
     import polars as pl
     import json
 
-    save_conf_prop(path="{analysis_output_path:s}",name="{params.name:s}",residues_file="{params.residues_file.as_posix():s}",output_path="{analysis_data_folder}",start=0,is_idr=True,select='all')
+    save_conf_prop(path="{analysis_output_path:s}",name="{params.name:s}",residues_file="{params.residues_file.as_posix():s}",output_path="{analysis_data_folder}",start={params.rg_skip},is_idr=True,select='all')
     
     df = pl.read_csv("{analysis_data_folder}/conf_prop.csv")
     rg_mean = df.filter( pl.col("") == "Rg" ).row(0, named=True)["value"]
@@ -152,6 +154,7 @@ if __name__ == "__main__":
         box_buffer=snakemake.params.get("box_buffer", 1000.0),
         prot_data=ProteinData(**snakemake.params["prot_data"]),
         residues_file=Path(snakemake.params["residues_file"]),
+        rg_skip=snakemake.params["rg_skip"],
     )
 
     write_calvados_inp_files(output_path=Path(snakemake.output[0]), params=params)

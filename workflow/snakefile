@@ -16,7 +16,7 @@ if database_file.suffix == ".parquet":
     )
 else:
     DATA_BASE = (
-        pl.scan_ipc(config["database_file"]).select("key", "prot_data").collect()
+        pl.scan_ipc(config["database_file"]).select("alpha_fold_db_id", "prot_data").rename({"alpha_fold_db_id" : "key"}).collect()
     )
 
 ######################################################################
@@ -35,6 +35,9 @@ TIMESTEP = config["timestep"]
 RG_SKIP = config["rg_skip"]
 BOX_BUFFER = config["box_buffer"]
 
+N_SAVE_RG = config["n_save_rg"]
+N_SAVE_TRAJ = config["n_save_traj"]
+
 # Sequence globular domain criterion
 MINIMUM_DOMAIN_LENGTH = config.get("minimum_domain_length", 0)
 MINIMUM_IDR_LENGTH = config.get("minimum_idr_length", 0)
@@ -52,6 +55,9 @@ IDR_GLOB_SCALING = config["idr_glob_scaling"]
 
 # Residue location
 RESIDUE_LOCATION = config.get("residue_location", "Ca")
+
+# CALVADOS
+RESIDUES_FILE = config["calvados_residues_file"]
 
 ######################################################################
 # Read in the samples file
@@ -100,7 +106,6 @@ def get_prot_data(wc):
 def get_temp(wc):
     return SAMPLES[wc.sample]["temperature"]
 
-
 # sample wild card to ionic strength
 def get_ionic_strength(wc):
     return SAMPLES[wc.sample]["ionic_strength"]
@@ -121,7 +126,10 @@ def get_end_idx(wc):
 
 rule all:
     input:
-        [f"results/aggregated_rg.csv" for sample in SAMPLES.keys()],
+        # [f"results/calvados_files/{sample}" for sample in SAMPLES.keys()],
+        # [f"results/calvados_runs/{sample}/data/rgs.npy" for sample in SAMPLES.keys()],
+        "results/aggregated_rg_calvados.csv",
+        "results/aggregated_rg.csv"
 
 
 rule prepare_coarse_grained_inputs:
@@ -152,7 +160,9 @@ rule prepare_coarse_grained_inputs:
         end_idx=get_end_idx,
         glob_glob_scaling=GLOB_GLOB_SCALING,
         idr_glob_scaling=IDR_GLOB_SCALING,
-        residue_location=RESIDUE_LOCATION
+        residue_location=RESIDUE_LOCATION,
+        n_save_rg=N_SAVE_RG,
+        n_save_traj=N_SAVE_TRAJ
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
@@ -203,7 +213,6 @@ rule average_radius_of_gyration:
     script:
         workflow.source_path("scripts/average_radius_of_gyration.py")
 
-
 ### This last rule simply tries to collect all rg values
 KEYS = set()
 for samp in SAMPLES.values():
@@ -224,3 +233,50 @@ rule aggregate_rg:
         "results/aggregated_rg.csv",
     script:
         workflow.source_path("scripts/aggregate_json.py")
+
+
+rule prepare_calvados:
+    localrule: True
+    threads: 1
+    output:
+        directory("results/calvados_files/{sample}"),
+    params:
+        name="{sample}",
+        temp=get_temp,
+        ionic_strength=get_ionic_strength,
+        n_steps=N_STEPS,
+        prot_data=get_prot_data,
+        box_buffer=BOX_BUFFER,
+        start_idx=get_start_idx,
+        end_idx=get_end_idx,
+        n_save=N_SAVE_RG,
+        residues_file=RESIDUES_FILE,
+        rg_skip=RG_SKIP
+    script:
+        workflow.source_path("scripts/prepare_calvados_run.py")
+
+rule run_calvados:
+    threads: 1
+    input: "results/calvados_files/{sample}"
+    output:
+        rgs="results/calvados_runs/{sample}/rg.json",
+        folder=directory("results/calvados_runs/{sample}"),
+    shell:
+        "cp -r {input}/* {output.folder}\n"
+        "cd {output.folder}\n"
+        "python3 run.py --path ."
+
+
+rule aggregate_rg_calvados:
+    localrule: True
+    threads: 1
+    input:
+        [f"results/calvados_runs/{sample}/rg.json" for sample in SAMPLES.keys()],
+    params:
+        add_columns={**added_columns},
+        ignore_columns=["file"],
+    output:
+        "results/aggregated_rg_calvados.csv",
+    script:
+        workflow.source_path("scripts/aggregate_json.py")
+

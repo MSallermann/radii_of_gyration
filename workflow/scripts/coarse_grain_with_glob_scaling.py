@@ -39,8 +39,12 @@ from mpipi_lammps_gen.generate_pair_interactions import (
 class Params:
     temp: float
     ionic_strength: float
+
     n_steps: int
     timestep: float
+
+    n_save_rg: int
+    n_save_traj: int
 
     #### criterion
     # the plddts threshold
@@ -221,6 +225,8 @@ def create_lammps_files(
             "data_file_name": data_file_path.name,
             "run_str": run_str,
             "pairs": pairs_str,
+            "n_save_rg": params.n_save_rg,
+            "n_save_traj": params.n_save_traj,
         },
     }
 
@@ -259,6 +265,8 @@ if __name__ == "__main__":
             "coordination_distance_cutoff"
         ),
         box_buffer=snakemake.params.get("box_buffer", 0.0),
+        n_save_traj=snakemake.params["n_save_traj"],
+        n_save_rg=snakemake.params["n_save_rg"],
     )
 
     protein_data_dict = snakemake.params["prot_data"]
