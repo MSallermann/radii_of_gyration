@@ -228,7 +228,10 @@ def coarse_grain(
 
 
 if __name__ == "__main__":
-    from snakemake.script import snakemake
+    try:
+        from snakemake.script import snakemake
+    except ImportError:
+        ...
 
     template_file = snakemake.input["template_file"]
 

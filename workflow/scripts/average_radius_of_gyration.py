@@ -17,7 +17,10 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
 
 
 if __name__ == "__main__":
-    from snakemake.script import snakemake
+    try:
+        from snakemake.script import snakemake
+    except ImportError:
+        ...
 
     average_radius_of_gyration(
         input_file=snakemake.input[0],

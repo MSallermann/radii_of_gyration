@@ -3,7 +3,6 @@ from calvados.cfg import Config, Components
 from mpipi_lammps_gen.generate_lammps_files import (
     ProteinData,
     trim_protein,
-    parse_cif_from_path,
 )
 from mpipi_lammps_gen.mdtraj_conversion import protein_to_mdtraj, plddt_to_bfactor
 import json
@@ -23,7 +22,7 @@ class CalvadosParams:
     n_save: int
     start_idx: int | None
     end_idx: int | None
-    box_buffer: float
+    box_buffer: float | None
     prot_data: ProteinData
 
     residues_file: Path
@@ -32,8 +31,6 @@ class CalvadosParams:
 def write_calvados_inp_files(output_path: Path, params: CalvadosParams):
     output_path = output_path.absolute()
     output_path.mkdir(exist_ok=True)
-
-    print(output_path)
 
     start_idx = params.start_idx - 1 if params.start_idx is not None else 0
     end_idx = (
@@ -44,7 +41,7 @@ def write_calvados_inp_files(output_path: Path, params: CalvadosParams):
 
     prot_data = trim_protein(params.prot_data, start_idx, end_idx)
 
-    res_pos = np.array(prot_data.residue_positions)
+    res_pos = np.array(prot_data.get_residue_positions())
     x_lo = (np.min(res_pos[:, 0]) - params.box_buffer) / 10.0  # convert to nm
     x_hi = (np.max(res_pos[:, 0]) + params.box_buffer) / 10.0  # convert to nm
     y_lo = (np.min(res_pos[:, 1]) - params.box_buffer) / 10.0  # convert to nm
@@ -76,11 +73,22 @@ def write_calvados_inp_files(output_path: Path, params: CalvadosParams):
     data_path = output_path / "data"
     data_path.mkdir(exist_ok=True)
 
+    analysis_output_path: str = output_path.relative_to(output_path).as_posix()
+    analysis_data_folder: str = data_path.relative_to(output_path).as_posix()
+
     analyses = f"""
-
     from calvados.analysis import save_conf_prop
+    import polars as pl
+    import json
 
-    save_conf_prop(path="{output_path.as_posix():s}",name="{params.name:s}",residues_file="{params.residues_file.as_posix():s}",output_path="{data_path.as_posix()}",start=0,is_idr=True,select='all')
+    save_conf_prop(path="{analysis_output_path:s}",name="{params.name:s}",residues_file="{params.residues_file.as_posix():s}",output_path="{analysis_data_folder}",start=0,is_idr=True,select='all')
+    
+    df = pl.read_csv("{analysis_data_folder}/conf_prop.csv")
+    rg_mean = df.filter( pl.col("") == "Rg" ).row(0, named=True)["value"]
+    rg_err = df.filter( pl.col("") == "Rg" ).row(0, named=True)["error"]
+
+    with open("./rg.json", "w") as f:
+        json.dump({{"rg_mean": rg_mean*10.0, "rg_err": rg_err*10.0}}, f) # convert to angs and save
     """
 
     output_path.mkdir(exist_ok=True, parents=True)
@@ -110,7 +118,9 @@ def write_calvados_inp_files(output_path: Path, params: CalvadosParams):
     # Write the pdb file
     traj = protein_to_mdtraj(prot_data)
 
-    traj.unitcell_lengths = box
+    traj.unitcell_lengths = [
+        b * 10.0 for b in box
+    ]  # have to convert back to angstrom for pdb
     traj.unitcell_angles = [90.0] * 3
 
     traj.save_pdb(
@@ -129,27 +139,19 @@ def write_calvados_inp_files(output_path: Path, params: CalvadosParams):
 
 
 if __name__ == "__main__":
-    prot_data = parse_cif_from_path(
-        Path(
-            "/home/sie/Biocondensates/lammps_input_generator_for_mpipi/tests/res/Q9ULK0.cif"
-        )
-    )
-    n_res = len(prot_data.sequence_one_letter)
-    prot_data.pae = (np.random.uniform(size=(n_res, n_res)) * 10.0).tolist()
+    # from snakemake.script import snakemake
 
     params = CalvadosParams(
-        name="testing",
-        temperature_k=300,
-        ionic_strength_mm=150,
-        n_steps=10000,
-        n_save=10,
-        start_idx=20,
-        end_idx=30,
-        box_buffer=100.0,
-        prot_data=prot_data,
-        residues_file=Path(
-            "/home/sie/Biocondensates/CALVADOS_stuff/CALVADOS/examples/single_AF_CALVADOS/input/residues.csv"
-        ),
+        name=snakemake.params["name"],
+        temperature_k=snakemake.params["temp"],
+        ionic_strength_mm=snakemake.params["ionic_strength"],
+        n_steps=snakemake.params["n_steps"],
+        n_save=snakemake.params["n_save"],
+        start_idx=snakemake.params.get("start_idx"),
+        end_idx=snakemake.params.get("end_idx"),
+        box_buffer=snakemake.params.get("box_buffer", 1000.0),
+        prot_data=ProteinData(**snakemake.params["prot_data"]),
+        residues_file=Path(snakemake.params["residues_file"]),
     )
 
-    write_calvados_inp_files(output_path=Path("./test_output"), params=params)
+    write_calvados_inp_files(output_path=Path(snakemake.output[0]), params=params)
