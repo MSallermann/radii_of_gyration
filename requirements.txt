@@ -2,4 +2,5 @@ polars
 pandas
 snakemake
 snakemake-executor-plugin-cluster-generic
+pulp==2.7
 git+https://github.com/MSallermann/lammps_input_generator_for_mpipi.git
