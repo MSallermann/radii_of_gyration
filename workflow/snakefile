@@ -2,74 +2,73 @@ import polars as pl
 from pathlib import Path
 import itertools
 import json
+from dataclasses import dataclass, asdict
 
 configfile: "config.yml"
-
-######################################################################
-# The database file from which the prot_data dicts are read in 
-######################################################################
-
-database_file = Path(config["database_file"])
-if database_file.suffix == ".parquet":
-    DATA_BASE = (
-        pl.scan_parquet(config["database_file"]).select("key", "prot_data").collect()
-    )
-else:
-    DATA_BASE = (
-        pl.scan_ipc(config["database_file"]).select("alpha_fold_db_id", "prot_data").rename({"alpha_fold_db_id" : "key"}).collect()
-    )
 
 ######################################################################
 # Parse some information from the config.yml.file
 ######################################################################
 
-# The command to invoke lammps. May be as simple as `lmp`, but can also be more complicated e.g. `srun --ntasks {resources.ntasks} path/to/lmp`
-LAMMPS_BIN = config["lammps_binary"]
+@dataclass
+class MyConfig:
+    database_file : str
+    samples_file : str
 
-# The jinja template file to be used for the lammps script
-TEMPLATE_FILE = config["template_file"]
+    lammps_binary : str | None
+    lammps_script_template : str | None
 
-# Number of simulation steps in the final nvt run
-N_STEPS = config["n_steps"]
-TIMESTEP = config["timestep"]
-RG_SKIP = config["rg_skip"]
-BOX_BUFFER = config["box_buffer"]
+    n_steps : int
+    timestep : float
+    rg_skip : int
+    box_buffer : float
+    n_save_rg : int
+    n_save_traj : int
 
-N_SAVE_RG = config["n_save_rg"]
-N_SAVE_TRAJ = config["n_save_traj"]
+    samples_start_idx : int = 0
+    samples_end_idx : int | None = None
 
-# Sequence globular domain criterion
-MINIMUM_DOMAIN_LENGTH = config.get("minimum_domain_length", 0)
-MINIMUM_IDR_LENGTH = config.get("minimum_idr_length", 0)
+    minimum_domain_length : int = 0
+    minimum_idr_length : int = 0
 
-# Geometric globular domain criterion (these are all optional)
-MIN_PAE_CUTOFF = config.get("min_pae_cutoff")
-MEAN_PAE_CUTOFF = config.get("mean_pae_cutoff")
-MIN_DISTANCE_CUTOFF = config.get("min_distance_cutoff")
-MAX_COORDINATION_CUTOFF = config.get("max_coordination_cutoff")
-COORDINATION_DISTANCE_CUTOFF = config.get("coordination_distance_cutoff")
+    min_pae_cutoff : float | None = None
+    mean_pae_cutoff : float | None = None
+    min_distance_cutoff : float | None = None
+    max_coordination_cutoff : int | None = None
+    coordination_distance_cutoff : float | None = None
 
-# Globular domain interactions
-GLOB_GLOB_SCALING = config["glob_glob_scaling"]
-IDR_GLOB_SCALING = config["idr_glob_scaling"]
+    glob_glob_scaling : float | None = None
+    idr_glob_scaling : float | None = None
 
-# Residue location
-RESIDUE_LOCATION = config.get("residue_location", "Ca")
+    residue_location : str | None = "Ca"
+    calvados_residues_file : str | None = None
 
-# CALVADOS
-RESIDUES_FILE = config["calvados_residues_file"]
+myconfig = MyConfig(**config)
+
+######################################################################
+# The database file from which the prot_data dicts are read in 
+######################################################################
+
+database_file = Path(myconfig.database_file)
+if database_file.suffix == ".parquet":
+    DATA_BASE = (
+        pl.scan_parquet(database_file).select("key", "prot_data").collect()
+    )
+else:
+    DATA_BASE = (
+        pl.scan_ipc(database_file).select("key", "prot_data").collect()
+    )
+
 
 ######################################################################
 # Read in the samples file
 ######################################################################
 
-SAMPLES_PATH = config.get("samples_file", "samples.json")
-
-with open(SAMPLES_PATH, "rb") as f:
+with open(myconfig.samples_file, "rb") as f:
     SAMPLES = json.load(f)
 
-SAMPLES_START_IDX = int(config.get("samples_start_idx", 0))
-SAMPLES_END_IDX = int(config.get("samples_end_idx", len(SAMPLES)))
+SAMPLES_START_IDX = myconfig.samples_start_idx
+SAMPLES_END_IDX = myconfig.samples_end_idx if myconfig.samples_end_idx is not None else len(SAMPLES)
 
 print(f"{SAMPLES_START_IDX = }")
 print(f"{SAMPLES_END_IDX = }")
@@ -119,7 +118,6 @@ def get_threshold(wc):
 def get_start_idx(wc):
     return SAMPLES[wc.sample].get("start_idx")
 
-
 def get_end_idx(wc):
     return SAMPLES[wc.sample].get("end_idx")
 
@@ -134,7 +132,7 @@ rule calvados:
 rule prepare_coarse_grained_inputs:
     localrule: True
     input:
-        template_file=ancient(Path(TEMPLATE_FILE)),
+        template_file=ancient(myconfig.lammps_script_template),
     shadow:
         "copy-minimal"
     threads: 1
@@ -143,25 +141,25 @@ rule prepare_coarse_grained_inputs:
     params:
         temp=get_temp,
         ionic_strength=get_ionic_strength,
-        n_steps=N_STEPS,
-        timestep=TIMESTEP,
-        threshold=get_threshold,
-        minimum_domain_length=MINIMUM_DOMAIN_LENGTH,
-        minimum_idr_length=MINIMUM_IDR_LENGTH,
         prot_data=get_prot_data,
-        min_pae_cutoff=MIN_PAE_CUTOFF,
-        mean_pae_cutoff=MEAN_PAE_CUTOFF,
-        min_distance_cutoff=MIN_DISTANCE_CUTOFF,
-        max_coordination_cutoff=MAX_COORDINATION_CUTOFF,
-        coordination_distance_cutoff=COORDINATION_DISTANCE_CUTOFF,
-        box_buffer=BOX_BUFFER,
+        threshold=get_threshold,
         start_idx=get_start_idx,
         end_idx=get_end_idx,
-        glob_glob_scaling=GLOB_GLOB_SCALING,
-        idr_glob_scaling=IDR_GLOB_SCALING,
-        residue_location=RESIDUE_LOCATION,
-        n_save_rg=N_SAVE_RG,
-        n_save_traj=N_SAVE_TRAJ
+        n_steps=myconfig.n_steps,
+        timestep=myconfig.timestep,
+        minimum_domain_length=myconfig.minimum_domain_length,
+        minimum_idr_length=myconfig.minimum_idr_length,
+        min_pae_cutoff=myconfig.min_pae_cutoff,
+        mean_pae_cutoff=myconfig.mean_pae_cutoff,
+        min_distance_cutoff=myconfig.min_distance_cutoff,
+        max_coordination_cutoff=myconfig.max_coordination_cutoff,
+        coordination_distance_cutoff=myconfig.coordination_distance_cutoff,
+        box_buffer=myconfig.box_buffer,
+        glob_glob_scaling=myconfig.glob_glob_scaling,
+        idr_glob_scaling=myconfig.idr_glob_scaling,
+        residue_location=myconfig.residue_location,
+        n_save_rg=myconfig.n_save_rg,
+        n_save_traj=myconfig.n_save_traj
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
@@ -198,7 +196,7 @@ rule run_lammps:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
         "export OMP_NUM_THREADS={resources.cpus_per_task}\n"
-        f"{LAMMPS_BIN} -in script.lmp 1> /dev/null 2> /dev/null\n"
+        f"{myconfig.lammps_binary} -in script.lmp 1> /dev/null 2> /dev/null\n"
 
 
 rule average_radius_of_gyration:
@@ -208,7 +206,7 @@ rule average_radius_of_gyration:
     output:
         rg_json="results/rg/{sample}/rg.json",
     params:
-        n_skip=int(RG_SKIP),
+        n_skip=int(myconfig.rg_skip),
     script:
         workflow.source_path("scripts/average_radius_of_gyration.py")
 
@@ -243,14 +241,14 @@ rule prepare_calvados:
         name="{sample}",
         temp=get_temp,
         ionic_strength=get_ionic_strength,
-        n_steps=N_STEPS,
+        n_steps=myconfig.n_steps,
         prot_data=get_prot_data,
-        box_buffer=BOX_BUFFER,
+        box_buffer=myconfig.box_buffer,
         start_idx=get_start_idx,
         end_idx=get_end_idx,
-        n_save=N_SAVE_RG,
-        residues_file=RESIDUES_FILE,
-        rg_skip=RG_SKIP
+        n_save=myconfig.n_save_rg,
+        residues_file=myconfig.calvados_residues_file,
+        rg_skip=myconfig.rg_skip
     script:
         workflow.source_path("scripts/prepare_calvados_run.py")
 
