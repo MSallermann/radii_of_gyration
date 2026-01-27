@@ -271,18 +271,31 @@ if __name__ == "__main__":
 
     protein_data_dict = snakemake.params["prot_data"]
     protein_data = ProteinData(**protein_data_dict)
-    assert protein_data.plddts is not None
-    assert protein_data.atom_xyz is not None
 
     residue_location = snakemake.params.get("residue_location", "Ca")
-    if residue_location == "calvados":
-        method = [
-            "com" if plddt > params.threshold else "Ca" for plddt in protein_data.plddts
-        ]
-    else:
-        method = residue_location
 
-    protein_data.compute_residue_positions(method=method)
+    if residue_location is not None:
+        if protein_data.atom_xyz is None:
+            msg = "Tried to use the `residue_location` parameter, but no atomic coordinates are given in the coarse grained protein_data (prot_data.atom_xyz is None)"
+            raise Exception(msg)
+
+        if residue_location == "calvados":
+            assert protein_data.plddts is not None
+            # In CALVADOS, residues in glob domains are at the center of mass position, while residues in IDRs are at Ca
+            method = [
+                "com" if plddt > params.threshold else "Ca"
+                for plddt in protein_data.plddts
+            ]
+        else:
+            method = residue_location
+
+        residue_positions = (
+            protein_data.compute_residue_positions(method=method) is not None
+        )
+    else:
+        residue_positions = protein_data.get_residue_positions()
+
+    assert residue_positions is not None
 
     lammps_data = create_lammps_data(params, protein_data)
 
