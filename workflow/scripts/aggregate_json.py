@@ -51,9 +51,14 @@ if __name__ == "__main__":
         from snakemake.script import snakemake
     except ImportError:
         ...
+    
+    if len(snakemake.input) > 0:
+        input_paths = snakemake.input
+    else:
+        input_paths = snakemake.params["input_paths"]
 
     main(
-        snakemake.input,
+        input_paths,
         snakemake.output[0],
         snakemake.params.get("add_columns", None),
         snakemake.params.get("ignore_columns", None),
