@@ -1,22 +1,78 @@
 import numpy as np
 from pathlib import Path
 import json
+import matplotlib.pyplot as plt
+
+
+def moving_avg(x):
+    return np.cumsum(x) / np.arange(1, len(x) + 1)
 
 
 def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | str):
     out_json = Path(out_json)
 
-    rg = np.atleast_1d(np.loadtxt(input_file))[n_skip:]
+    rg_full = np.atleast_1d(np.loadtxt(input_file))
+
+    rg = rg_full[n_skip:]
 
     rg_mean = np.mean(rg)
     rg_std = np.std(rg)
     n_samples = len(rg)
+    rg_err = rg_std / np.sqrt(n_samples)
 
     with out_json.open("w") as f:
-        json.dump({"rg_mean": rg_mean, "rg_std": rg_std, "n_samples": n_samples}, f)
+        json.dump(
+            {
+                "rg_mean": rg_mean,
+                "rg_std": rg_std,
+                "n_samples": n_samples,
+                "rg_err": rg_err,
+                "n_skip" : n_skip,
+            },
+            f,
+        )
+
+    fig, ax = plt.subplots()
+
+    steps = np.arange(1, len(rg_full) + 1)
+
+    ax.plot(
+        steps[:n_skip],
+        rg_full[:n_skip],
+        color="grey",
+        marker=".",
+        ls="None",
+        label="skipped",
+    )
+
+    ax.plot(
+        steps[n_skip:],
+        rg_full[n_skip:],
+        color="blue",
+        marker=".",
+        ls="None",
+        label="computed",
+    )
+
+    running_avg = moving_avg(rg)
+    ax.plot(steps[n_skip:], running_avg, label="running mean", color="black")
+    ax.axhline(float(rg_mean), ls="--", color="black", label="total mean")
+    ax.legend()
+    ax.set_xlabel("steps")
+    ax.set_ylabel("Rg [Angs.]")
+
+    ax.set_title(
+        f"mean={rg_mean:.2e}, err={rg_err:.2e}, std={rg_std:.2e}\n"
+        f"n_samples={n_samples:.0f}, n_skip={n_skip:.0f}"
+    )
+
+    fig.tight_layout()
+
+    fig.savefig(out_json.parent / "plot.png", dpi=300)
 
 
 if __name__ == "__main__":
+
     try:
         from snakemake.script import snakemake
     except ImportError:

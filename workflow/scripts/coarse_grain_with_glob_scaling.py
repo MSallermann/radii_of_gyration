@@ -6,8 +6,6 @@ import numpy as np
 
 import logging
 
-logger = logging.getLogger(__name__)
-
 from mpipi_lammps_gen.generate_lammps_files import (
     generate_lammps_data,
     get_lammps_group_definition,
@@ -33,6 +31,8 @@ from mpipi_lammps_gen.generate_pair_interactions import (
     get_wf_pairs_str,
     generate_wf_interactions,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
