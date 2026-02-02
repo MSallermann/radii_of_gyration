@@ -121,13 +121,34 @@ def get_start_idx(wc):
 def get_end_idx(wc):
     return SAMPLES[wc.sample].get("end_idx")
 
-rule mpipi:
+
+######################################################################
+# Target rules
+######################################################################
+
+rule mpipi_prepare:
+    input:
+        [f"results/lammps_files/{sample}" for sample in SAMPLES]
+
+rule mpipi_avg:
+    input:
+        [f"results/rg/{sample}/rg.json" for sample in SAMPLES]
+
+rule mpipi_aggregate:
     input:
         "results/aggregated_rg.csv"
+
+rule mpipi:
+    input:
+        rules.mpipi_prepare.input, rules.mpipi_avg.input, rules.mpipi_aggregate.input
 
 rule calvados:
     input:
         "results/aggregated_rg_calvados.csv"
+
+######################################################################
+# Other rules
+######################################################################
 
 rule prepare_coarse_grained_inputs:
     localrule: True
