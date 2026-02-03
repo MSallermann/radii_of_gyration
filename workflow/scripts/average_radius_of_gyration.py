@@ -20,6 +20,14 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
     n_samples = len(rg)
     rg_err = rg_std / np.sqrt(n_samples)
 
+    running_avg = moving_avg(rg)
+
+    # the last 20% of the computed values
+    running_avg_tail = running_avg[int(n_samples * 0.8) :]
+    relative_deviation_running_avg_tail = np.std(running_avg_tail) / np.mean(
+        running_avg_tail
+    )
+
     with out_json.open("w") as f:
         json.dump(
             {
@@ -27,7 +35,8 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
                 "rg_std": rg_std,
                 "n_samples": n_samples,
                 "rg_err": rg_err,
-                "n_skip" : n_skip,
+                "n_skip": n_skip,
+                "relative_deviation_tail": relative_deviation_running_avg_tail,
             },
             f,
         )
@@ -54,7 +63,6 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
         label="computed",
     )
 
-    running_avg = moving_avg(rg)
     ax.plot(steps[n_skip:], running_avg, label="running mean", color="black")
     ax.axhline(float(rg_mean), ls="--", color="black", label="total mean")
     ax.legend()
@@ -72,7 +80,6 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
 
 
 if __name__ == "__main__":
-
     try:
         from snakemake.script import snakemake
     except ImportError:
