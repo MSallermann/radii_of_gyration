@@ -24,9 +24,7 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
 
     # the last 20% of the computed values
     running_avg_tail = running_avg[int(n_samples * 0.8) :]
-    relative_deviation_running_avg_tail = np.std(running_avg_tail) / np.mean(
-        running_avg_tail
-    )
+    tail_deviation = (np.mean(running_avg_tail) - rg_mean) / rg_mean
 
     with out_json.open("w") as f:
         json.dump(
@@ -36,7 +34,7 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
                 "n_samples": n_samples,
                 "rg_err": rg_err,
                 "n_skip": n_skip,
-                "relative_deviation_tail": relative_deviation_running_avg_tail,
+                "tail_deviation": tail_deviation,
             },
             f,
         )
@@ -61,6 +59,13 @@ def average_radius_of_gyration(input_file: Path, n_skip: int, out_json: Path | s
         marker=".",
         ls="None",
         label="computed",
+    )
+
+    ax.fill_between(
+        steps[n_skip + int(0.8 * n_samples) :],
+        y1=rg_mean + tail_deviation * rg_mean,
+        y2=rg_mean,
+        alpha=0.2,
     )
 
     ax.plot(steps[n_skip:], running_avg, label="running mean", color="black")
