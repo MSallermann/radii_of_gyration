@@ -131,7 +131,8 @@ def get_end_idx(wc):
 
 rule mpipi_prepare:
     input:
-        [f"results/lammps_files/{sample}" for sample in SAMPLES]
+        [f"results/lammps_files/{sample}/data_file.data" for sample in SAMPLES],
+        [f"results/lammps_files/{sample}/script.lmp" for sample in SAMPLES],
 
 rule mpipi_avg:
     input:
@@ -165,8 +166,8 @@ rule prepare_coarse_grained_inputs:
         "copy-minimal"
     threads: 1
     output:
-        output_folder=directory("results/lammps_files/{sample}"),
-        data_file="results/lammps_files/{sample}/data_file.data"
+        data_file="results/lammps_files/{sample}/data_file.data",
+        script="results/lammps_files/{sample}/script.lmp",
     params:
         temp=get_temp,
         ionic_strength=get_ionic_strength,
@@ -211,12 +212,15 @@ def get_n_threads(wildcards):
 
 rule run_lammps:
     input:
-        "results/lammps_files/{sample}",
+        # rules.prepare_coarse_grained_inputs.output
+        data_file="results/lammps_files/{sample}/data_file.data",
+        script="results/lammps_files/{sample}/script.lmp",
     output:
-        folder=directory("results/lammps_runs/{sample}"),
         traj="results/lammps_runs/{sample}/result.lammpstrj",
         gyration="results/lammps_runs/{sample}/gyration.out",
     threads: get_n_threads
+    params:
+        workdir=lambda wc: f"results/lammps_runs/{wc.sample}",
     resources:
         nodes=1,
         ntasks_per_node=get_n_threads,
@@ -224,10 +228,11 @@ rule run_lammps:
         slurm_out=lambda wc: f"results/lammps_files/{wc.sample}/slurm.out",
         slurm_err=lambda wc: f"results/lammps_files/{wc.sample}/slurm.err",
     shell:
-        "cp -r {input}/* {output.folder}\n"
-        "cd {output.folder}\n"
+        "cp -r {input.script} {params.workdir}\n"
+        "cp -r {input.data_file} {params.workdir}\n"
+        "cd {params.workdir}\n"
         "export OMP_NUM_THREADS={resources.cpus_per_task}\n"
-        f"{myconfig.lammps_binary} -in script.lmp 1> /dev/null 2> /dev/null\n"
+        f"{myconfig.lammps_binary} -in script.lmp\n"
 
 
 rule average_radius_of_gyration:

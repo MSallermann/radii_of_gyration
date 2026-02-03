@@ -309,11 +309,14 @@ if __name__ == "__main__":
     )
     pairs_str = get_wf_pairs_str(interactions=wf_interactions)
 
-    output_folder = Path(snakemake.output[0])
+    script_path = Path(snakemake.output["script"])
+    data_file_path = Path(snakemake.output["data_file"])
+
+    output_folder = data_file_path.parent
 
     create_lammps_files(
-        script_path=output_folder / "script.lmp",
-        data_file_path=output_folder / "data_file.data",
+        script_path=script_path,
+        data_file_path=data_file_path,
         jinja_workdir=output_folder / ".jinjaworkdirs",
         params=params,
         script_template_file=template_file,
