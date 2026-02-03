@@ -148,7 +148,7 @@ rule mpipi_aggregate:
 
 rule mpipi:
     input:
-        rules.mpipi_prepare.input, rules.mpipi_avg.input,rules.mpipi_aggregate.input
+        rules.mpipi_prepare.input, rules.mpipi_avg.input,rules.mpipi_aggregate.input,rules.mpipi_avg_rij.input
 
 rule calvados:
     input:
