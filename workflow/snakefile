@@ -21,6 +21,7 @@ class MyConfig:
     n_steps : int
     timestep : float
     rg_skip : int
+    rij_skip : int
     box_buffer : float
     n_save_rg : int
     n_save_traj : int
@@ -42,6 +43,8 @@ class MyConfig:
 
     residue_location : str | None = "Ca"
     calvados_residues_file : str | None = None
+
+    nvt_seed: int = 34278
 
 myconfig = MyConfig(**config)
 
@@ -134,13 +137,17 @@ rule mpipi_avg:
     input:
         [f"results/rg/{sample}/rg.json" for sample in SAMPLES]
 
+rule mpipi_avg_rij:
+    input:
+        [f"results/rij/{sample}/pair_distances.csv" for sample in SAMPLES]
+
 rule mpipi_aggregate:
     input:
         "results/aggregated_rg.csv"
 
 rule mpipi:
     input:
-        rules.mpipi_prepare.input, rules.mpipi_avg.input, rules.mpipi_aggregate.input
+        rules.mpipi_prepare.input, rules.mpipi_avg.input,rules.mpipi_aggregate.input
 
 rule calvados:
     input:
@@ -158,7 +165,8 @@ rule prepare_coarse_grained_inputs:
         "copy-minimal"
     threads: 1
     output:
-        directory("results/lammps_files/{sample}"),
+        output_folder=directory("results/lammps_files/{sample}"),
+        data_file="results/lammps_files/{sample}/data_file.data"
     params:
         temp=get_temp,
         ionic_strength=get_ionic_strength,
@@ -180,7 +188,8 @@ rule prepare_coarse_grained_inputs:
         idr_glob_scaling=myconfig.idr_glob_scaling,
         residue_location=myconfig.residue_location,
         n_save_rg=myconfig.n_save_rg,
-        n_save_traj=myconfig.n_save_traj
+        n_save_traj=myconfig.n_save_traj,
+        nvt_seed=myconfig.nvt_seed
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
@@ -205,6 +214,7 @@ rule run_lammps:
         "results/lammps_files/{sample}",
     output:
         folder=directory("results/lammps_runs/{sample}"),
+        traj="results/lammps_runs/{sample}/result.lammpstrj",
         gyration="results/lammps_runs/{sample}/gyration.out",
     threads: get_n_threads
     resources:
@@ -231,6 +241,20 @@ rule average_radius_of_gyration:
     script:
         workflow.source_path("scripts/average_radius_of_gyration.py")
 
+
+rule average_pair_distance:
+    localrule: True
+    input:
+        lammps_data_file="results/lammps_files/{sample}/data_file.data",
+        lammps_traj_file="results/lammps_runs/{sample}/result.lammpstrj",
+    params:
+        n_skip=myconfig.rij_skip
+    output:
+        output_csv = "results/rij/{sample}/pair_distances.csv",
+        output_json = "results/rij/{sample}/rij.json",
+    script:
+        workflow.source_path("scripts/average_residue_distance.py")
+
 ### This last rule simply tries to collect all rg values
 KEYS = set()
 for samp in SAMPLES.values():
@@ -252,6 +276,8 @@ rule aggregate_rg:
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
+
+### CALVADOS
 
 rule prepare_calvados:
     localrule: True

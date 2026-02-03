@@ -46,6 +46,8 @@ class Params:
     n_save_rg: int
     n_save_traj: int
 
+    nvt_seed: int
+
     #### criterion
     # the plddts threshold
     threshold: float
@@ -211,6 +213,7 @@ def create_lammps_files(
         n_time_steps=params.n_steps,
         dt_ramp_up=params.dt_ramp_up,
         steps_per_stage=params.steps_per_stage,
+        seed=params.nvt_seed,
     )
 
     run_str = min_cmd + viscous_cmd + nvt_cmd
@@ -267,6 +270,7 @@ if __name__ == "__main__":
         box_buffer=snakemake.params.get("box_buffer", 0.0),
         n_save_traj=snakemake.params["n_save_traj"],
         n_save_rg=snakemake.params["n_save_rg"],
+        nvt_seed=snakemake.params["nvt_seed"],
     )
 
     protein_data_dict = snakemake.params["prot_data"]
