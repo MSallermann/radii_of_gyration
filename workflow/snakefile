@@ -148,7 +148,7 @@ rule mpipi_aggregate:
 
 rule mpipi:
     input:
-        rules.mpipi_prepare.input, rules.mpipi_avg.input,rules.mpipi_aggregate.input,rules.mpipi_avg_rij.input
+        rules.mpipi_prepare.input,rules.mpipi_avg.input,rules.mpipi_aggregate.input,rules.mpipi_avg_rij.input
 
 rule calvados:
     input:
@@ -281,6 +281,19 @@ rule aggregate_rg:
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
+
+rule aggregate_rij:
+    localrule: True
+    threads: 1
+    input:
+        [f"results/rij/{sample}/rij.json" for sample in SAMPLES.keys()],
+    params:
+        add_columns={**added_columns},
+        ignore_columns=["file"],
+    output:
+        "results/aggregated_rij.csv",
+    script:
+        workflow.source_path("scripts/aggregate_json.py")
 
 ### CALVADOS
 
