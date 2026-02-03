@@ -31,20 +31,30 @@ def pair_distance(
 
     N = len(atoms)
     max_sep = N - 1
-    sum_dist = np.zeros(max_sep + 1)
-    count = np.zeros(max_sep + 1, dtype=int)
+ 
+    sum_mean = np.zeros(max_sep + 1)
+    sum_mean_sq = np.zeros(max_sep + 1)
+    n_frames = 0
 
     for ts in u.trajectory[n_skip:]:
-        pos = atoms.positions  # (N,3) in Å by default in MDAnalysis for LAMMPS dumps
+        pos = atoms.positions
+        frame_mean = np.zeros(max_sep + 1)
+
         for sep in range(1, max_sep + 1):
-            d = pos[sep:] - pos[:-sep]  # vectors between i and i+sep
-            r = np.linalg.norm(d, axis=1)  # distances
-            sum_dist[sep] += r.sum()
-            count[sep] += r.size
+            r = np.linalg.norm(pos[sep:] - pos[:-sep], axis=1)
+            frame_mean[sep] = r.mean()
 
-    R_sep = sum_dist / count  # <R_ij> as a function of |i-j|
+        sum_mean += frame_mean
+        sum_mean_sq += frame_mean**2
+        n_frames += 1
 
-    df = pl.DataFrame({"sequence_dist": range(max_sep + 1), "r_ij_avg": R_sep})
+    R_sep = sum_mean / n_frames
+    var = (sum_mean_sq - n_frames * R_sep**2) / (n_frames - 1)
+    R_sep_err = np.sqrt(var / n_frames)
+
+    df = pl.DataFrame(
+        {"sequence_dist": range(max_sep + 1), "r_ij_avg": R_sep, "r_ij_err": R_sep_err}
+    )
     df = df.fill_nan(0.0)
     df.write_csv(output_csv)
 
@@ -95,6 +105,15 @@ def pair_distance(
 
     ### Make a quick plot
     fig, ax = plt.subplots()
+
+    ax.fill_between(
+        df["sequence_dist"],
+        df["r_ij_avg"] - df["r_ij_err"],
+        df["r_ij_avg"] + df["r_ij_err"],
+        color="grey",
+        alpha=0.3,
+    )
+
     ax.plot(
         df["sequence_dist"], df["r_ij_avg"], color="black", marker=".", label="data"
     )
