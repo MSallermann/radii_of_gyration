@@ -18,17 +18,38 @@ def analyse_lammps_log(log_file: Path, n_skip: int, output_json: Path):
 
     avg_data = {}
 
+    steps = lf.get("Step")
+
     for col in cols:
         fig, ax = plt.subplots()
 
-        avg_data[col] = np.mean(lf.get(col)[n_skip:])
+        col_vals = lf.get(col)
 
-        ax.plot(lf.get("Step"), lf.get(col), label=col)
+        avg_data[col] = np.mean(col_vals[n_skip:])
+
         ax.plot(
-            lf.get("Step"), moving_avg(lf.get(col)), color="black", label="Moving Avg"
+            steps[:n_skip],
+            col_vals[:n_skip],
+            color="grey",
+            marker=".",
+            ls="None",
+            label="skipped",
         )
 
-        ax.axhline(avg_data[col], ls="--", color="black")
+        ax.plot(
+            steps[n_skip:],
+            col_vals[n_skip:],
+            color="blue",
+            marker=".",
+            ls="None",
+            label="computed",
+        )
+
+        ax.plot(
+            steps[n_skip:], moving_avg(col_vals), label="running mean", color="black"
+        )
+
+        ax.axhline(avg_data[col], ls="--", color="black", label="total mean")
 
         ax.legend()
         ax.set_xlabel("Step")
