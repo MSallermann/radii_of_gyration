@@ -45,9 +45,7 @@ def analyse_lammps_log(log_file: Path, n_skip: int, output_json: Path):
             label="computed",
         )
 
-        ax.plot(
-            steps[n_skip:], moving_avg(col_vals), label="running mean", color="black"
-        )
+        ax.plot(steps, moving_avg(col_vals), label="running mean", color="black")
 
         ax.axhline(avg_data[col], ls="--", color="black", label="total mean")
 
