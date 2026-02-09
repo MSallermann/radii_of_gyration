@@ -22,6 +22,7 @@ class MyConfig:
     timestep : float
     rg_skip : int
     rij_skip : int
+    log_skip : int
     box_buffer : float
     n_save_rg : int
     n_save_traj : int
@@ -142,6 +143,10 @@ rule mpipi_avg_rij:
     input:
         [f"results/rij/{sample}/pair_distances.csv" for sample in SAMPLES]
 
+rule mpipi_analyse_logs:
+    input:
+        [f"results/log_data/{sample}/avg.json" for sample in SAMPLES]
+
 rule mpipi_aggregate:
     input:
         "results/aggregated_rg.csv"
@@ -218,6 +223,7 @@ rule run_lammps:
     output:
         traj="results/lammps_runs/{sample}/result.lammpstrj",
         gyration="results/lammps_runs/{sample}/gyration.out",
+        log="results/lammps_runs/{sample}/log.lammps",
     threads: get_n_threads
     params:
         workdir=lambda wc: f"results/lammps_runs/{wc.sample}",
@@ -233,6 +239,17 @@ rule run_lammps:
         "cd {params.workdir}\n"
         "export OMP_NUM_THREADS={resources.cpus_per_task}\n"
         f"{myconfig.lammps_binary} -in script.lmp\n"
+
+rule analyse_log:
+    localrule: True
+    input:
+        "results/lammps_runs/{sample}/log.lammps"
+    output:
+        "results/log_data/{sample}/avg.json"
+    params:
+        n_skip= myconfig.log_skip,
+    script:
+        workflow.source_path("scripts/analyse_lammps_log.py")
 
 
 rule average_radius_of_gyration:
