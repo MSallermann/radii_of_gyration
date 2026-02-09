@@ -312,6 +312,20 @@ rule aggregate_rij:
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
+rule aggregate_log_data:
+    localrule: True
+    threads: 1
+    input:
+        [f"results/log_data/{sample}/avg.json" for sample in SAMPLES.keys()],
+    params:
+        add_columns={**added_columns},
+        ignore_columns=["file"],
+    output:
+        "results/aggregated_log_data.csv",
+    script:
+        workflow.source_path("scripts/aggregate_json.py")
+
+
 ### CALVADOS
 
 rule prepare_calvados:
