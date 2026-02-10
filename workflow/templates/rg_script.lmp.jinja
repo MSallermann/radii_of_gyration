@@ -100,6 +100,7 @@ comm_style    tiled
 ########   COMPUTE RESULTS  #######
 
 ## Radius
+
 compute k all gyration
 compute cc1 all chunk/atom molecule
 compute radio all gyration/chunk cc1
@@ -110,7 +111,7 @@ fix radio all ave/time 100000 1 100000 c_radio file radio.out mode vector
 
 ### Density profile
 compute densidad all chunk/atom bin/1d z lower 1
-fix 3 all ave/chunk 200000 1 200000 densidad density/mass file density.profile
+fix 3 all ave/chunk {{params.n_save_density}} 1 {{params.n_save_density}} densidad density/mass file density.profile
 #######################################
 
 dump          1 all custom {{params.n_save_traj}} result.lammpstrj id mol type q xu yu zu

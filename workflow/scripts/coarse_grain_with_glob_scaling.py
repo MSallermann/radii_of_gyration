@@ -11,6 +11,7 @@ from mpipi_lammps_gen.generate_lammps_files import (
     get_lammps_group_definition,
     get_lammps_minimize_command,
     get_lammps_nvt_command,
+    get_lammps_npt_command,
     get_lammps_viscous_command,
     write_lammps_data_file,
     trim_protein,
@@ -45,6 +46,7 @@ class Params:
 
     n_save_rg: int
     n_save_traj: int
+    n_save_density: int
 
     nvt_seed: int
 
@@ -66,10 +68,16 @@ class Params:
     # the distance cutoff used to compute coordination numbers
     coordination_distance_cutoff: float | None
 
+    n_proteins_x: int = 1
+    n_proteins_y: int = 1
+    n_proteins_z: int = 1
+
     box_buffer: float | None = 1.0
 
     dt_ramp_up: list[float] = field(default_factory=lambda: [0.1, 1.0])
     steps_per_stage: int = 10000
+
+    press: float | None = None
 
     # slicing up the sequence
     start_idx: int | None = None
@@ -170,7 +178,12 @@ def create_lammps_data(params: Params, protein_data: ProteinData) -> LammpsData:
         box_buffer = params.box_buffer
 
     lammps_data = generate_lammps_data(
-        protein_data, globular_domains, box_buffer=box_buffer
+        protein_data,
+        globular_domains,
+        box_buffer=box_buffer,
+        n_proteins_x=params.n_proteins_x,
+        n_proteins_y=params.n_proteins_y,
+        n_proteins_z=params.n_proteins_z,
     )
 
     return lammps_data
@@ -206,17 +219,44 @@ def create_lammps_files(
         limit=0.01,
     )
 
-    nvt_cmd = get_lammps_nvt_command(
-        lammps_data,
-        timestep=params.timestep,
-        temp=params.temp,
-        n_time_steps=params.n_steps,
-        dt_ramp_up=params.dt_ramp_up,
-        steps_per_stage=params.steps_per_stage,
-        seed=params.nvt_seed,
-    )
+    if params.press is None:
+        production_run = get_lammps_nvt_command(
+            lammps_data,
+            timestep=params.timestep,
+            temp=params.temp,
+            n_time_steps=params.n_steps,
+            dt_ramp_up=params.dt_ramp_up,
+            steps_per_stage=params.steps_per_stage,
+            seed=params.nvt_seed,
+        )
+    else:
+        # else we have to run npt
 
-    run_str = min_cmd + viscous_cmd + nvt_cmd
+        # we first
+
+        n_steps_small_nvt = params.steps_per_stage
+        production_run = get_lammps_nvt_command(
+            lammps_data,
+            timestep=params.timestep,
+            temp=params.temp,
+            n_time_steps=n_steps_small_nvt,
+            dt_ramp_up=params.dt_ramp_up,
+            steps_per_stage=params.steps_per_stage,
+            seed=params.nvt_seed,
+        )
+
+        production_run += get_lammps_npt_command(
+            lammps_data,
+            timestep=params.timestep,
+            temp=params.temp,
+            press=params.press,
+            n_time_steps=params.n_steps,
+            dt_ramp_up=params.dt_ramp_up,
+            steps_per_stage=params.steps_per_stage,
+            seed=params.nvt_seed,
+        )
+
+    run_str = min_cmd + viscous_cmd + production_run
 
     variables: dict[str, Any] = {
         "input": {"template": script_template_file},
@@ -230,6 +270,7 @@ def create_lammps_files(
             "pairs": pairs_str,
             "n_save_rg": params.n_save_rg,
             "n_save_traj": params.n_save_traj,
+            "n_save_density": params.n_save_density,
         },
     }
 
@@ -252,6 +293,7 @@ if __name__ == "__main__":
 
     params = Params(
         temp=snakemake.params["temp"],
+        press=snakemake.params["press"],
         ionic_strength=snakemake.params["ionic_strength"],
         n_steps=snakemake.params["n_steps"],
         timestep=snakemake.params["timestep"],
@@ -270,7 +312,11 @@ if __name__ == "__main__":
         box_buffer=snakemake.params.get("box_buffer", 0.0),
         n_save_traj=snakemake.params["n_save_traj"],
         n_save_rg=snakemake.params["n_save_rg"],
+        n_save_density=snakemake.params["n_save_density"],
         nvt_seed=snakemake.params["nvt_seed"],
+        n_proteins_x=snakemake.params.get("n_proteins_x", 1),
+        n_proteins_y=snakemake.params.get("n_proteins_y", 1),
+        n_proteins_z=snakemake.params.get("n_proteins_z", 1),
     )
 
     protein_data_dict = snakemake.params["prot_data"]

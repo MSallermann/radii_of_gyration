@@ -24,8 +24,13 @@ class MyConfig:
     rij_skip : int
     log_skip : int
     box_buffer : float
+
     n_save_rg : int
     n_save_traj : int
+
+    pressure : float | None = None
+
+    n_save_density : int = 200000
 
     samples_start_idx : int = 0
     samples_end_idx : int | None = None
@@ -46,6 +51,11 @@ class MyConfig:
     calvados_residues_file : str | None = None
 
     nvt_seed: int = 34278
+
+    n_proteins_x : int = 1
+    n_proteins_y : int = 1
+    n_proteins_z : int = 1
+
 
 myconfig = MyConfig(**config)
 
@@ -105,19 +115,17 @@ def get_prot_data(wc):
     return get_db_row(wc).get("prot_data")
 
 
-# sample wild card to temperature
 def get_temp(wc):
     return SAMPLES[wc.sample]["temperature"]
 
-# sample wild card to ionic strength
+def get_press(wc):
+    return SAMPLES[wc.sample].get("pressure", myconfig.pressure)
+
 def get_ionic_strength(wc):
     return SAMPLES[wc.sample]["ionic_strength"]
 
-
-# sample wild card to threshold
 def get_threshold(wc):
     return SAMPLES[wc.sample]["threshold"]
-
 
 def get_start_idx(wc):
     return SAMPLES[wc.sample].get("start_idx")
@@ -125,6 +133,14 @@ def get_start_idx(wc):
 def get_end_idx(wc):
     return SAMPLES[wc.sample].get("end_idx")
 
+def get_n_proteins_x(wc):
+    return SAMPLES[wc.sample].get("n_proteins_x", myconfig.n_proteins_x)
+
+def get_n_proteins_y(wc):
+    return SAMPLES[wc.sample].get("n_proteins_y", myconfig.n_proteins_y)
+    
+def get_n_proteins_z(wc):
+    return SAMPLES[wc.sample].get("n_proteins_z", myconfig.n_proteins_z)
 
 ######################################################################
 # Target rules
@@ -175,6 +191,7 @@ rule prepare_coarse_grained_inputs:
         script="results/lammps_files/{sample}/script.lmp",
     params:
         temp=get_temp,
+        press=get_press,
         ionic_strength=get_ionic_strength,
         prot_data=get_prot_data,
         threshold=get_threshold,
@@ -195,7 +212,11 @@ rule prepare_coarse_grained_inputs:
         residue_location=myconfig.residue_location,
         n_save_rg=myconfig.n_save_rg,
         n_save_traj=myconfig.n_save_traj,
-        nvt_seed=myconfig.nvt_seed
+        n_save_density=myconfig.n_save_density,
+        nvt_seed=myconfig.nvt_seed,
+        n_proteins_x=get_n_proteins_x,
+        n_proteins_y=get_n_proteins_y,
+        n_proteins_z=get_n_proteins_z,
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
