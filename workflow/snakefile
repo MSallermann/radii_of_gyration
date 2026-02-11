@@ -152,6 +152,10 @@ rule mpipi_prepare:
         [f"{myconfig.results_folder}/lammps_files/{sample}/data_file.data" for sample in SAMPLES],
         [f"{myconfig.results_folder}/lammps_files/{sample}/script.lmp" for sample in SAMPLES],
 
+rule mpipi_run:
+    input:
+        [f"{myconfig.results_folder}/lammps_runs/{{sample}}/log.lammps" for sample in SAMPLES],
+
 rule mpipi_avg:
     input:
         [f"{myconfig.results_folder}/rg/{sample}/rg.json" for sample in SAMPLES]
@@ -170,7 +174,11 @@ rule mpipi_aggregate:
 
 rule mpipi:
     input:
-        rules.mpipi_prepare.input,rules.mpipi_avg.input,rules.mpipi_aggregate.input,rules.mpipi_avg_rij.input
+        rules.mpipi_prepare.input,
+        rules.mpipi_run.input,
+        rules.mpipi_avg.input,
+        rules.mpipi_aggregate.input,
+        rules.mpipi_avg_rij.input
 
 rule calvados:
     input:
