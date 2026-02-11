@@ -56,6 +56,7 @@ class MyConfig:
     n_proteins_y : int = 1
     n_proteins_z : int = 1
 
+    results_folder : str = "results"
 
 myconfig = MyConfig(**config)
 
@@ -110,10 +111,8 @@ def get_db_row(wc):
 
     return db_filtered.row(0, named=True)
 
-
 def get_prot_data(wc):
     return get_db_row(wc).get("prot_data")
-
 
 def get_temp(wc):
     return SAMPLES[wc.sample]["temperature"]
@@ -148,24 +147,24 @@ def get_n_proteins_z(wc):
 
 rule mpipi_prepare:
     input:
-        [f"results/lammps_files/{sample}/data_file.data" for sample in SAMPLES],
-        [f"results/lammps_files/{sample}/script.lmp" for sample in SAMPLES],
+        [f"{myconfig.results_folder}/lammps_files/{sample}/data_file.data" for sample in SAMPLES],
+        [f"{myconfig.results_folder}/lammps_files/{sample}/script.lmp" for sample in SAMPLES],
 
 rule mpipi_avg:
     input:
-        [f"results/rg/{sample}/rg.json" for sample in SAMPLES]
+        [f"{myconfig.results_folder}/rg/{sample}/rg.json" for sample in SAMPLES]
 
 rule mpipi_avg_rij:
     input:
-        [f"results/rij/{sample}/pair_distances.csv" for sample in SAMPLES]
+        [f"{myconfig.results_folder}/rij/{sample}/pair_distances.csv" for sample in SAMPLES]
 
 rule mpipi_analyse_logs:
     input:
-        [f"results/log_data/{sample}/avg.json" for sample in SAMPLES]
+        [f"{myconfig.results_folder}/log_data/{sample}/avg.json" for sample in SAMPLES]
 
 rule mpipi_aggregate:
     input:
-        "results/aggregated_rg.csv"
+        f"{myconfig.results_folder}/aggregated_rg.csv"
 
 rule mpipi:
     input:
@@ -173,7 +172,7 @@ rule mpipi:
 
 rule calvados:
     input:
-        "results/aggregated_rg_calvados.csv"
+        f"{myconfig.results_folder}/aggregated_rg_calvados.csv"
 
 ######################################################################
 # Other rules
@@ -187,8 +186,8 @@ rule prepare_coarse_grained_inputs:
         "copy-minimal"
     threads: 1
     output:
-        data_file="results/lammps_files/{sample}/data_file.data",
-        script="results/lammps_files/{sample}/script.lmp",
+        data_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/data_file.data",
+        script=f"{myconfig.results_folder}/lammps_files/{{sample}}/script.lmp",
     params:
         temp=get_temp,
         press=get_press,
@@ -239,21 +238,21 @@ def get_n_threads(wildcards):
 rule run_lammps:
     input:
         # rules.prepare_coarse_grained_inputs.output
-        data_file="results/lammps_files/{sample}/data_file.data",
-        script="results/lammps_files/{sample}/script.lmp",
+        data_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/data_file.data",
+        script=f"{myconfig.results_folder}/lammps_files/{{sample}}/script.lmp",
     output:
-        traj="results/lammps_runs/{sample}/result.lammpstrj",
-        gyration="results/lammps_runs/{sample}/gyration.out",
-        log="results/lammps_runs/{sample}/log.lammps",
+        traj=f"{myconfig.results_folder}/lammps_runs/{{sample}}/result.lammpstrj",
+        gyration=f"{myconfig.results_folder}/lammps_runs/{{sample}}/gyration.out",
+        log=f"{myconfig.results_folder}/lammps_runs/{{sample}}/log.lammps",
     threads: get_n_threads
     params:
-        workdir=lambda wc: f"results/lammps_runs/{wc.sample}",
+        workdir=lambda wc: f"{myconfig.results_folder}/lammps_runs/{wc.sample}",
     resources:
         nodes=1,
         ntasks_per_node=get_n_threads,
         cpus_per_task=1,
-        slurm_out=lambda wc: f"results/lammps_files/{wc.sample}/slurm.out",
-        slurm_err=lambda wc: f"results/lammps_files/{wc.sample}/slurm.err",
+        slurm_out=lambda wc: f"{myconfig.results_folder}/lammps_files/{wc.sample}/slurm.out",
+        slurm_err=lambda wc: f"{myconfig.results_folder}/lammps_files/{wc.sample}/slurm.err",
     shell:
         "cp -r {input.script} {params.workdir}\n"
         "cp -r {input.data_file} {params.workdir}\n"
@@ -264,9 +263,9 @@ rule run_lammps:
 rule analyse_log:
     localrule: True
     input:
-        "results/lammps_runs/{sample}/log.lammps"
+        f"{myconfig.results_folder}/lammps_runs/{{sample}}/log.lammps"
     output:
-        "results/log_data/{sample}/avg.json"
+        f"{myconfig.results_folder}/log_data/{{sample}}/avg.json"
     params:
         n_skip= myconfig.log_skip,
     script:
@@ -276,9 +275,9 @@ rule analyse_log:
 rule average_radius_of_gyration:
     localrule: True
     input:
-        "results/lammps_runs/{sample}/gyration.out",
+        f"{myconfig.results_folder}/lammps_runs/{{sample}}/gyration.out",
     output:
-        rg_json="results/rg/{sample}/rg.json",
+        rg_json=f"{myconfig.results_folder}/rg/{{sample}}/rg.json",
     params:
         n_skip=int(myconfig.rg_skip),
     script:
@@ -288,13 +287,13 @@ rule average_radius_of_gyration:
 rule average_pair_distance:
     localrule: True
     input:
-        lammps_data_file="results/lammps_files/{sample}/data_file.data",
-        lammps_traj_file="results/lammps_runs/{sample}/result.lammpstrj",
+        lammps_data_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/data_file.data",
+        lammps_traj_file=f"{myconfig.results_folder}/lammps_runs/{{sample}}/result.lammpstrj",
     params:
         n_skip=myconfig.rij_skip
     output:
-        output_csv = "results/rij/{sample}/pair_distances.csv",
-        output_json = "results/rij/{sample}/rij.json",
+        output_csv = f"{myconfig.results_folder}/rij/{{sample}}/pair_distances.csv",
+        output_json = f"{myconfig.results_folder}/rij/{{sample}}/rij.json",
     script:
         workflow.source_path("scripts/average_residue_distance.py")
 
@@ -310,12 +309,12 @@ rule aggregate_rg:
     localrule: True
     threads: 1
     input:
-        [f"results/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
+        [f"{myconfig.results_folder}/rg/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={**added_columns},
         ignore_columns=["file"],
     output:
-        "results/aggregated_rg.csv",
+        f"{myconfig.results_folder}/aggregated_rg.csv",
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
@@ -324,12 +323,12 @@ rule aggregate_rij:
     localrule: True
     threads: 1
     input:
-        [f"results/rij/{sample}/rij.json" for sample in SAMPLES.keys()],
+        [f"{myconfig.results_folder}/rij/{sample}/rij.json" for sample in SAMPLES.keys()],
     params:
         add_columns={**added_columns},
         ignore_columns=["file"],
     output:
-        "results/aggregated_rij.csv",
+        f"{myconfig.results_folder}/aggregated_rij.csv",
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
@@ -337,12 +336,12 @@ rule aggregate_log_data:
     localrule: True
     threads: 1
     input:
-        [f"results/log_data/{sample}/avg.json" for sample in SAMPLES.keys()],
+        [f"{myconfig.results_folder}/log_data/{sample}/avg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={**added_columns},
         ignore_columns=["file"],
     output:
-        "results/aggregated_log_data.csv",
+        f"{myconfig.results_folder}/aggregated_log_data.csv",
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
@@ -353,7 +352,7 @@ rule prepare_calvados:
     localrule: True
     threads: 1
     output:
-        directory("results/calvados_files/{sample}"),
+        directory(f"{myconfig.results_folder}/calvados_files/{{sample}}"),
     params:
         name="{sample}",
         temp=get_temp,
@@ -371,10 +370,10 @@ rule prepare_calvados:
 
 rule run_calvados:
     threads: 1
-    input: "results/calvados_files/{sample}"
+    input: f"{myconfig.results_folder}/calvados_files/{{sample}}"
     output:
-        rgs="results/calvados_runs/{sample}/rg.json",
-        folder=directory("results/calvados_runs/{sample}"),
+        rgs=f"{myconfig.results_folder}/calvados_runs/{{sample}}/rg.json",
+        folder=directory(f"{myconfig.results_folder}/calvados_runs/{{sample}}"),
     shell:
         "cp -r {input}/* {output.folder}\n"
         "cd {output.folder}\n"
@@ -385,12 +384,12 @@ rule aggregate_rg_calvados:
     localrule: True
     threads: 1
     input:
-        [f"results/calvados_runs/{sample}/rg.json" for sample in SAMPLES.keys()],
+        [f"{myconfig.results_folder}/calvados_runs/{sample}/rg.json" for sample in SAMPLES.keys()],
     params:
         add_columns={**added_columns},
         ignore_columns=["file"],
     output:
-        "results/aggregated_rg_calvados.csv",
+        f"{myconfig.results_folder}/aggregated_rg_calvados.csv",
     script:
         workflow.source_path("scripts/aggregate_json.py")
 
