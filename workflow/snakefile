@@ -32,6 +32,8 @@ class MyConfig:
 
     n_save_density : int = 200000
 
+    n_cores_lammps : int | None = None
+
     samples_start_idx : int = 0
     samples_end_idx : int | None = None
 
@@ -221,6 +223,9 @@ rule prepare_coarse_grained_inputs:
 
 
 def get_n_threads(wildcards):
+    if myconfig.n_cores_lammps is not None:
+        return myconfig.n_cores_lammps
+
     start_idx = get_start_idx(wildcards)
     end_idx = get_end_idx(wildcards)
 
