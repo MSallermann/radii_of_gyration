@@ -154,7 +154,7 @@ rule mpipi_prepare:
 
 rule mpipi_run:
     input:
-        [f"{myconfig.results_folder}/lammps_runs/{{sample}}/log.lammps" for sample in SAMPLES],
+        [f"{myconfig.results_folder}/lammps_runs/{sample}/log.lammps" for sample in SAMPLES],
 
 rule mpipi_avg:
     input:
