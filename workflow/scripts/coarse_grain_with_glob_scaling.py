@@ -79,6 +79,9 @@ class Params:
 
     press: float | None = None
 
+    intermediate_press: float | None = None
+    n_steps_intermediate_press: int | None = None
+
     # slicing up the sequence
     start_idx: int | None = None
     end_idx: int | None = None
@@ -232,8 +235,6 @@ def create_lammps_files(
     else:
         # else we have to run npt
 
-        # we first
-
         n_steps_small_nvt = params.steps_per_stage
         production_run = get_lammps_nvt_command(
             lammps_data,
@@ -244,6 +245,24 @@ def create_lammps_files(
             steps_per_stage=params.steps_per_stage,
             seed=params.nvt_seed,
         )
+
+        if params.intermediate_press is not None:
+            assert params.n_steps_intermediate_press is not None
+
+            production_run += f"# Running {params.n_steps_intermediate_press} steps at intermediate pressure of {params.intermediate_press} atm\n"
+            production_run += get_lammps_npt_command(
+                lammps_data,
+                timestep=params.timestep,
+                temp=params.temp,
+                press=params.intermediate_press,
+                n_time_steps=params.n_steps_intermediate_press,
+                dt_ramp_up=params.dt_ramp_up,
+                steps_per_stage=params.steps_per_stage,
+                seed=params.nvt_seed,
+            )
+
+            # We dont need the ramp up phase twice
+            params.dt_ramp_up = []
 
         production_run += get_lammps_npt_command(
             lammps_data,
@@ -317,6 +336,10 @@ if __name__ == "__main__":
         n_proteins_x=snakemake.params.get("n_proteins_x", 1),
         n_proteins_y=snakemake.params.get("n_proteins_y", 1),
         n_proteins_z=snakemake.params.get("n_proteins_z", 1),
+        intermediate_press=snakemake.params.get("intermediate_pressure"),
+        n_steps_intermediate_press=snakemake.params.get(
+            "n_steps_intermediate_pressure"
+        ),
     )
 
     protein_data_dict = snakemake.params["prot_data"]

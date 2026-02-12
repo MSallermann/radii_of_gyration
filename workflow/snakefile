@@ -30,6 +30,9 @@ class MyConfig:
 
     pressure : float | None = None
 
+    intermediate_pressure : float | None = None
+    n_steps_intermediate_pressure : int | None = None
+
     n_save_density : int = 200000
 
     n_cores_lammps : int | None = None
@@ -226,6 +229,8 @@ rule prepare_coarse_grained_inputs:
         n_proteins_x=get_n_proteins_x,
         n_proteins_y=get_n_proteins_y,
         n_proteins_z=get_n_proteins_z,
+        intermediate_pressure=myconfig.intermediate_pressure,
+        n_steps_intermediate_pressure=myconfig.n_steps_intermediate_pressure
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
