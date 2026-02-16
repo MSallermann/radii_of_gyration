@@ -201,6 +201,7 @@ rule prepare_coarse_grained_inputs:
     output:
         data_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/data_file.data",
         script=f"{myconfig.results_folder}/lammps_files/{{sample}}/script.lmp",
+        globular_domains_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/domains.json",
     params:
         temp=get_temp,
         press=get_press,
@@ -307,6 +308,7 @@ rule average_pair_distance:
     input:
         lammps_data_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/data_file.data",
         lammps_traj_file=f"{myconfig.results_folder}/lammps_runs/{{sample}}/result.lammpstrj",
+        globular_domains_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/domains.json"
     params:
         n_skip=myconfig.rij_skip
     output:

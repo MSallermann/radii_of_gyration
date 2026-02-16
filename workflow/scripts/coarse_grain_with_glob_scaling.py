@@ -4,6 +4,9 @@ from typing import Any
 
 import numpy as np
 
+import json
+from dataclasses import asdict
+
 import logging
 
 from mpipi_lammps_gen.generate_lammps_files import (
@@ -87,7 +90,9 @@ class Params:
     end_idx: int | None = None
 
 
-def create_lammps_data(params: Params, protein_data: ProteinData) -> LammpsData:
+def create_lammps_data(
+    params: Params, protein_data: ProteinData, globular_domains_file: Path
+) -> LammpsData:
     # Optionally slice up the proteins
     if params.start_idx is not None or params.end_idx is not None:
         if params.start_idx is None:
@@ -187,7 +192,11 @@ def create_lammps_data(params: Params, protein_data: ProteinData) -> LammpsData:
         n_proteins_x=params.n_proteins_x,
         n_proteins_y=params.n_proteins_y,
         n_proteins_z=params.n_proteins_z,
+        grid_buffer=0,
     )
+
+    with open(globular_domains_file, "w") as f:
+        json.dump([asdict(g) for g in globular_domains], f)
 
     return lammps_data
 
@@ -370,8 +379,6 @@ if __name__ == "__main__":
 
     assert residue_positions is not None
 
-    lammps_data = create_lammps_data(params, protein_data)
-
     wf_interactions = generate_wf_interactions(
         idr_glob_scaling=snakemake.params["idr_glob_scaling"],
         glob_glob_scaling=snakemake.params["glob_glob_scaling"],
@@ -380,8 +387,11 @@ if __name__ == "__main__":
 
     script_path = Path(snakemake.output["script"])
     data_file_path = Path(snakemake.output["data_file"])
+    globular_domains_file = Path(snakemake.output["globular_domains_file"])
 
     output_folder = data_file_path.parent
+
+    lammps_data = create_lammps_data(params, protein_data, globular_domains_file)
 
     create_lammps_files(
         script_path=script_path,
