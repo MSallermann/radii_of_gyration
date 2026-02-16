@@ -31,6 +31,7 @@ def pair_distance(
     lammps_traj_file: Path,
     n_skip: int,
     domains: Iterable[GlobularDomain] | None = None,
+    use_graph_distance: bool = True,
 ):
     u = mda.Universe(
         lammps_data_file, lammps_traj_file, format="LAMMPSDUMP"
@@ -39,7 +40,7 @@ def pair_distance(
 
     N = len(atoms)
 
-    if domains is None:
+    if domains is None or not use_graph_distance:
         domains = []
 
     graph = build_protein_graph(n_residues=N, domains=list(domains))
@@ -186,4 +187,5 @@ if __name__ == "__main__":
         lammps_traj_file=Path(snakemake.input["lammps_traj_file"]),
         n_skip=snakemake.params["n_skip"],
         domains=domains,
+        use_graph_distance=snakemake.params["use_graph_distance"],
     )

@@ -28,6 +28,8 @@ class MyConfig:
     n_save_rg : int
     n_save_traj : int
 
+    use_rij_graph_distance : bool = True
+
     pressure : float | None = None
 
     intermediate_pressure : float | None = None
@@ -310,7 +312,8 @@ rule average_pair_distance:
         lammps_traj_file=f"{myconfig.results_folder}/lammps_runs/{{sample}}/result.lammpstrj",
         globular_domains_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/domains.json"
     params:
-        n_skip=myconfig.rij_skip
+        n_skip=myconfig.rij_skip,
+        use_graph_distance=myconfig.use_rij_graph_distance
     output:
         output_csv = f"{myconfig.results_folder}/rij/{{sample}}/pair_distances.csv",
         output_json = f"{myconfig.results_folder}/rij/{{sample}}/rij.json",
