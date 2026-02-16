@@ -6,6 +6,13 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import json
 import numpy.typing as npt
+from mpipi_lammps_gen.globular_domains import (
+    GlobularDomain,
+    build_protein_graph,
+    shortest_path_matrix,
+)
+import json
+from collections.abc import Iterable
 
 
 def get_r2(y_data: npt.ArrayLike, y_fit: npt.ArrayLike) -> float:
@@ -23,6 +30,7 @@ def pair_distance(
     lammps_data_file: Path,
     lammps_traj_file: Path,
     n_skip: int,
+    domains: Iterable[GlobularDomain] | None = None,
 ):
     u = mda.Universe(
         lammps_data_file, lammps_traj_file, format="LAMMPSDUMP"
@@ -30,18 +38,37 @@ def pair_distance(
     atoms = u.atoms
 
     N = len(atoms)
-    max_sep = N - 1
- 
+
+    if domains is None:
+        domains = []
+
+    graph = build_protein_graph(n_residues=N, domains=list(domains))
+    separation_matrix = shortest_path_matrix(
+        n_residues=N, domains=list(domains), protein_graph=graph
+    )
+
+    indices_by_separation = []
+    max_sep = 0
+    for sep in range(0, N - 1):
+        mask = separation_matrix == sep
+
+        if np.count_nonzero(mask) > 0:
+            max_sep = sep
+
+        indices_by_separation.append(np.argwhere(mask))
+
     sum_mean = np.zeros(max_sep + 1)
     sum_mean_sq = np.zeros(max_sep + 1)
     n_frames = 0
 
+    # Iterate over frames in the trajectory
     for ts in u.trajectory[n_skip:]:
         pos = atoms.positions
         frame_mean = np.zeros(max_sep + 1)
 
         for sep in range(1, max_sep + 1):
-            r = np.linalg.norm(pos[sep:] - pos[:-sep], axis=1)
+            indices = indices_by_separation[sep]
+            r = np.linalg.norm(pos[indices[:, 0]] - pos[indices[:, 1]], axis=1)
             frame_mean[sep] = r.mean()
 
         sum_mean += frame_mean
@@ -55,6 +82,7 @@ def pair_distance(
     df = pl.DataFrame(
         {"sequence_dist": range(max_sep + 1), "r_ij_avg": R_sep, "r_ij_err": R_sep_err}
     )
+
     df = df.fill_nan(0.0)
     df.write_csv(output_csv)
 
@@ -144,10 +172,18 @@ if __name__ == "__main__":
     except ImportError:
         ...
 
+    domains_file = snakemake.input.get("globular_domains_file")
+    if domains_file is None:
+        domains = None
+    else:
+        with open(domains_file, "r") as f:
+            domains = [GlobularDomain(**t) for t in json.load(f)]
+
     pair_distance(
         output_csv=Path(snakemake.output["output_csv"]),
         output_json=Path(snakemake.output["output_json"]),
         lammps_data_file=Path(snakemake.input["lammps_data_file"]),
         lammps_traj_file=Path(snakemake.input["lammps_traj_file"]),
         n_skip=snakemake.params["n_skip"],
+        domains=domains,
     )
