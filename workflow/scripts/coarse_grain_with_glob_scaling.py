@@ -15,6 +15,7 @@ from mpipi_lammps_gen.generate_lammps_files import (
     get_lammps_minimize_command,
     get_lammps_nvt_command,
     get_lammps_npt_command,
+    get_lammps_npt_command_rigid,
     get_lammps_viscous_command,
     write_lammps_data_file,
     trim_protein,
@@ -84,6 +85,11 @@ class Params:
 
     intermediate_press: float | None = None
     n_steps_intermediate_press: int | None = None
+
+    use_rigid_npt: bool = False
+
+    tdamp: float = 100
+    pdamp: float = 1000
 
     # slicing up the sequence
     start_idx: int | None = None
@@ -240,6 +246,7 @@ def create_lammps_files(
             dt_ramp_up=params.dt_ramp_up,
             steps_per_stage=params.steps_per_stage,
             seed=params.nvt_seed,
+            lange_damp=params.tdamp * params.timestep,
         )
     else:
         # else we have to run npt
@@ -253,13 +260,21 @@ def create_lammps_files(
             dt_ramp_up=params.dt_ramp_up,
             steps_per_stage=params.steps_per_stage,
             seed=params.nvt_seed,
+            tdamp=params.tdamp * params.timestep,
+            lange_damp=params.tdamp * params.timestep,
         )
+
+        if len(lammps_data.groups) != 0 and params.use_rigid_npt:
+            npt_cmd_func = get_lammps_npt_command_rigid
+        else:
+            npt_cmd_func = get_lammps_npt_command
 
         if params.intermediate_press is not None:
             assert params.n_steps_intermediate_press is not None
 
             production_run += f"# Running {params.n_steps_intermediate_press} steps at intermediate pressure of {params.intermediate_press} atm\n"
-            production_run += get_lammps_npt_command(
+
+            production_run += npt_cmd_func(
                 lammps_data,
                 timestep=params.timestep,
                 temp=params.temp,
@@ -268,12 +283,15 @@ def create_lammps_files(
                 dt_ramp_up=params.dt_ramp_up,
                 steps_per_stage=params.steps_per_stage,
                 seed=params.nvt_seed,
+                lange_damp=params.tdamp * params.timestep,
+                tdamp=params.tdamp * params.timestep,
+                pdamp=params.pdamp * params.timestep,
             )
 
             # We dont need the ramp up phase twice
             params.dt_ramp_up = []
 
-        production_run += get_lammps_npt_command(
+        production_run += npt_cmd_func(
             lammps_data,
             timestep=params.timestep,
             temp=params.temp,
@@ -282,6 +300,9 @@ def create_lammps_files(
             dt_ramp_up=params.dt_ramp_up,
             steps_per_stage=params.steps_per_stage,
             seed=params.nvt_seed,
+            lange_damp=params.tdamp * params.timestep,
+            tdamp=params.tdamp * params.timestep,
+            pdamp=params.pdamp * params.timestep,
         )
 
     run_str = min_cmd + viscous_cmd + production_run
