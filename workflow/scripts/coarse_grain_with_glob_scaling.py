@@ -22,20 +22,17 @@ from mpipi_lammps_gen.generate_lammps_files import (
     LammpsData,
     ProteinData,
 )
-from mpipi_lammps_gen.util import (
-    coordination_numbers_from_distance_matrix,
-    group_distance_matrix,
-)
+
 from mpipi_lammps_gen.globular_domains import (
     decide_globular_domains_from_sequence,
     merge_domains,
-    GlobularDomain,
 )
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
 from mpipi_lammps_gen.generate_pair_interactions import (
     get_wf_pairs_str,
     generate_wf_interactions,
 )
+from mpipi_lammps_gen.domain_merge_strategies import MergeDistance, MergePAE
 
 logger = logging.getLogger(__name__)
 
@@ -125,25 +122,13 @@ def create_lammps_data(
 
         pae_matrix_arr = np.array(protein_data.pae)
 
-        def merge_based_on_pae(g1: GlobularDomain, g2: GlobularDomain) -> bool:
-            sub_pae = pae_matrix_arr[
-                g1.start_idx() : g1.end_idx(), g2.start_idx() : g2.end_idx()
-            ]
-
-            min_pae = np.min(np.ravel(sub_pae))
-
-            if params.min_pae_cutoff is not None and min_pae < params.min_pae_cutoff:
-                return True
-
-            mean_pae = np.mean(np.ravel(sub_pae))
-
-            if params.mean_pae_cutoff is not None and mean_pae < params.mean_pae_cutoff:
-                return True
-
-            return False
-
         globular_domains = merge_domains(
-            globular_domains, should_be_merged=merge_based_on_pae
+            globular_domains,
+            should_be_merged=MergePAE(
+                min_pae_cutoff=params.min_pae_cutoff,
+                mean_pae_cutoff=params.mean_pae_cutoff,
+                pae_matrix_arr=pae_matrix_arr,
+            ),
         )
 
     # Merge groups based on distance
@@ -158,32 +143,14 @@ def create_lammps_data(
         residue_positions = protein_data.get_residue_positions()
         assert residue_positions is not None
 
-        def merge_based_on_distance(g1: GlobularDomain, g2: GlobularDomain) -> bool:
-            distance_matrix = group_distance_matrix(residue_positions, g1, g2)
-
-            if params.min_distance_cutoff is not None:
-                min_distance = np.min(np.ravel(distance_matrix))
-                if min_distance <= params.min_distance_cutoff:
-                    return True
-
-            if (
-                params.max_coordination_cutoff is not None
-                and params.coordination_distance_cutoff is not None
-            ):
-                coord1, coord2 = coordination_numbers_from_distance_matrix(
-                    distance_matrix=distance_matrix,
-                    cutoff=params.coordination_distance_cutoff,
-                )
-                if (
-                    np.max(coord1) >= params.max_coordination_cutoff
-                    or np.max(coord2) >= params.max_coordination_cutoff
-                ):
-                    return True
-
-            return False
-
         globular_domains = merge_domains(
-            globular_domains, should_be_merged=merge_based_on_distance
+            globular_domains,
+            should_be_merged=MergeDistance(
+                min_distance_cutoff=params.min_distance_cutoff,
+                max_coordination_cutoff=params.max_coordination_cutoff,
+                coordination_distance_cutoff=params.coordination_distance_cutoff,
+                residue_positions=residue_positions,
+            ),
         )
 
     if params.box_buffer is None:
