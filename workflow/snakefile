@@ -50,6 +50,9 @@ class MyConfig:
     min_distance_cutoff : float | None = None
     max_coordination_cutoff : int | None = None
     coordination_distance_cutoff : float | None = None
+    fuse_seq : bool = False
+    fuse_merge : bool = False
+
 
     glob_glob_scaling : float | None = None
     idr_glob_scaling : float | None = None
@@ -233,7 +236,9 @@ rule prepare_coarse_grained_inputs:
         n_proteins_y=get_n_proteins_y,
         n_proteins_z=get_n_proteins_z,
         intermediate_pressure=myconfig.intermediate_pressure,
-        n_steps_intermediate_pressure=myconfig.n_steps_intermediate_pressure
+        n_steps_intermediate_pressure=myconfig.n_steps_intermediate_pressure,
+        fuse_seq=myconfig.fuse_seq,
+        fuse_merge=myconfig.fuse_merge
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 

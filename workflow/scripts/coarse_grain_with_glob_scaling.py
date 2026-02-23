@@ -68,6 +68,10 @@ class Params:
     max_coordination_cutoff: int | None
     # the distance cutoff used to compute coordination numbers
     coordination_distance_cutoff: float | None
+    # use the fuse strategy for the sequence based domain criterion
+    fuse_seq: bool = False
+    # use the fuse strategy for domain merging
+    fuse_merge: bool = False
 
     n_proteins_x: int = 1
     n_proteins_y: int = 1
@@ -114,6 +118,7 @@ def create_lammps_data(
         threshold=params.threshold,
         minimum_domain_length=params.minimum_domain_length,
         minimum_idr_length=params.minimum_idr_length,
+        fuse=params.fuse_seq,
     )
 
     # Merge groups based on PAE
@@ -129,6 +134,7 @@ def create_lammps_data(
                 mean_pae_cutoff=params.mean_pae_cutoff,
                 pae_matrix_arr=pae_matrix_arr,
             ),
+            fuse=params.fuse_merge,
         )
 
     # Merge groups based on distance
@@ -151,6 +157,7 @@ def create_lammps_data(
                 coordination_distance_cutoff=params.coordination_distance_cutoff,
                 residue_positions=residue_positions,
             ),
+            fuse=params.fuse_merge,
         )
 
     if params.box_buffer is None:
@@ -337,6 +344,8 @@ if __name__ == "__main__":
         n_steps_intermediate_press=snakemake.params.get(
             "n_steps_intermediate_pressure"
         ),
+        fuse_seq=snakemake.params.get("fuse_seq", False),
+        fuse_merge=snakemake.params.get("fuse_merge", False),
     )
 
     protein_data_dict = snakemake.params["prot_data"]
