@@ -84,7 +84,7 @@ class Params:
 
     press: float | None = None
 
-    intermediate_press: float | None = None
+    intermediate_press: list[float] | None = None
     n_steps_intermediate_press: int | None = None
 
     use_rigid_npt: bool = False
@@ -246,25 +246,30 @@ def create_lammps_files(
         if params.intermediate_press is not None:
             assert params.n_steps_intermediate_press is not None
 
-            production_run += f"# Running {params.n_steps_intermediate_press} steps at intermediate pressure of {params.intermediate_press} atm\n"
+            production_run += "\n\n# Running intermediate pressures."
 
-            production_run += npt_cmd_func(
-                lammps_data,
-                timestep=params.timestep,
-                temp=params.temp,
-                press=params.intermediate_press,
-                n_time_steps=params.n_steps_intermediate_press,
-                dt_ramp_up=params.dt_ramp_up,
-                steps_per_stage=params.steps_per_stage,
-                seed=params.nvt_seed,
-                lange_damp=params.tdamp * params.timestep,
-                tdamp=params.tdamp * params.timestep,
-                pdamp=params.pdamp * params.timestep,
-            )
+            for ipress in params.intermediate_press:
+                production_run += f"# ... Running at {params.n_steps_intermediate_press} steps at intermediate pressure of {ipress} atm\n"
+
+                production_run += npt_cmd_func(
+                    lammps_data,
+                    timestep=params.timestep,
+                    temp=params.temp,
+                    press=ipress,
+                    n_time_steps=params.n_steps_intermediate_press,
+                    dt_ramp_up=params.dt_ramp_up,
+                    steps_per_stage=params.steps_per_stage,
+                    seed=params.nvt_seed,
+                    lange_damp=params.tdamp * params.timestep,
+                    tdamp=params.tdamp * params.timestep,
+                    pdamp=params.pdamp * params.timestep,
+                )
 
             # We dont need the ramp up phase twice
             params.dt_ramp_up = []
 
+        # Now we run at the final pressure
+        production_run += f"\n\n# Running at final pressure of {params.press} atm"
         production_run += npt_cmd_func(
             lammps_data,
             timestep=params.timestep,
