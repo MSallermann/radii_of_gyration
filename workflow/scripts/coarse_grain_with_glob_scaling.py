@@ -9,6 +9,8 @@ from dataclasses import asdict
 
 import logging
 
+import functools
+
 from mpipi_lammps_gen.generate_lammps_files import (
     generate_lammps_data,
     get_lammps_group_definition,
@@ -88,6 +90,7 @@ class Params:
     n_steps_intermediate_press: int | None = None
 
     use_rigid_npt: bool = False
+    use_berendsen_npt: bool = False
 
     tdamp: float = 100
     pdamp: float = 1000
@@ -242,7 +245,9 @@ def create_lammps_files(
         if len(lammps_data.groups) != 0 and params.use_rigid_npt:
             npt_cmd_func = get_lammps_npt_command_rigid
         else:
-            npt_cmd_func = get_lammps_npt_command
+            npt_cmd_func = functools.partial(
+                get_lammps_npt_command, use_berendsen=params.use_berendsen_npt
+            )
 
         if params.intermediate_press is not None:
             assert params.n_steps_intermediate_press is not None
@@ -349,6 +354,7 @@ if __name__ == "__main__":
         ),
         fuse_seq=snakemake.params.get("fuse_seq", False),
         fuse_merge=snakemake.params.get("fuse_merge", False),
+        use_berendsen_npt=snakemake.params.get("use_berendsen_npt", False),
     )
 
     protein_data_dict = snakemake.params["prot_data"]
