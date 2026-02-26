@@ -32,7 +32,7 @@ from mpipi_lammps_gen.globular_domains import (
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
 from mpipi_lammps_gen.generate_pair_interactions import (
     get_wf_pairs_str,
-    generate_wf_interactions,
+    rescale_wf_interactions,
 )
 from mpipi_lammps_gen.domain_merge_strategies import MergeDistance, MergePAE
 
@@ -385,10 +385,11 @@ if __name__ == "__main__":
 
     assert residue_positions is not None
 
-    wf_interactions = generate_wf_interactions(
-        idr_glob_scaling=snakemake.params["idr_glob_scaling"],
-        glob_glob_scaling=snakemake.params["glob_glob_scaling"],
+    wf_interactions = rescale_wf_interactions(
+        idr_glob_rescaling=snakemake.params["idr_glob_rescaling"],
+        glob_glob_rescaling=snakemake.params["glob_glob_rescaling"],
     )
+
     pairs_str = get_wf_pairs_str(interactions=wf_interactions)
 
     script_path = Path(snakemake.output["script"])

@@ -53,8 +53,8 @@ class MyConfig:
     fuse_seq : bool = False
     fuse_merge : bool = False
 
-    glob_glob_scaling : float | None = None
-    idr_glob_scaling : float | None = None
+    glob_glob_rescaling : float = 1.0
+    idr_glob_rescaling : float = 1.0
 
     residue_location : str | None = "Ca"
     calvados_residues_file : str | None = None
@@ -224,8 +224,8 @@ rule prepare_coarse_grained_inputs:
         max_coordination_cutoff=myconfig.max_coordination_cutoff,
         coordination_distance_cutoff=myconfig.coordination_distance_cutoff,
         box_buffer=myconfig.box_buffer,
-        glob_glob_scaling=myconfig.glob_glob_scaling,
-        idr_glob_scaling=myconfig.idr_glob_scaling,
+        glob_glob_rescaling=myconfig.glob_glob_rescaling,
+        idr_glob_rescaling=myconfig.idr_glob_rescaling,
         residue_location=myconfig.residue_location,
         n_save_rg=myconfig.n_save_rg,
         n_save_traj=myconfig.n_save_traj,
