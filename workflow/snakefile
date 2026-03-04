@@ -163,7 +163,7 @@ class Sample:
 def get_sample(wc) -> Sample:
     return Sample(**SAMPLES[wc.sample])
 
-def get_attr_from_sample_or_config(wc, attr:str, fallback:bool=False):
+def get_attr_from_sample_or_config(wc, attr:str, fallback:bool=False, warn_if_none:bool=True):
     samp = get_sample(wc)
     assert hasattr(samp, attr)
 
@@ -177,14 +177,14 @@ def get_attr_from_sample_or_config(wc, attr:str, fallback:bool=False):
     # Look in the config as a fallback
     if attr_from_sample is None and fallback:
         attr_from_config = getattr(myconfig, attr)
-        if attr_from_config is None:
+        if attr_from_config is None and warn_if_none:
             logging.warning(f"{wc.sample}: Looked in sample and in config, but {attr} is still None")
         return attr_from_config
 
     return attr_from_sample
 
 get_temp = functools.partial(get_attr_from_sample_or_config, attr="temperature", fallback=True)
-get_press = functools.partial(get_attr_from_sample_or_config, attr="pressure", fallback=True)
+get_press = functools.partial(get_attr_from_sample_or_config, attr="pressure", fallback=True, warn_if_none=False) # pressure is allowed to be none
 get_ionic_strength = functools.partial(get_attr_from_sample_or_config, attr="ionic_strength", fallback=True)
 get_threshold = functools.partial(get_attr_from_sample_or_config, attr="threshold", fallback=True)
 get_n_proteins_x = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_x", fallback=True)
