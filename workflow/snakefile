@@ -3,6 +3,8 @@ from pathlib import Path
 import itertools
 import json
 from dataclasses import dataclass, asdict
+import functools
+import logging
 
 configfile: "config.yml"
 
@@ -30,6 +32,9 @@ class MyConfig:
 
     use_rij_graph_distance : bool = True
 
+    temperature : float | None = None
+    ionic_strength : float | None = None
+
     pressure : float | None = None
     use_berendsen_npt : bool = False
     intermediate_pressure : float | None = None
@@ -44,6 +49,8 @@ class MyConfig:
 
     minimum_domain_length : int = 0
     minimum_idr_length : int = 0
+
+    threshold : float | None = None
 
     min_pae_cutoff : float | None = None
     mean_pae_cutoff : float | None = None
@@ -120,38 +127,59 @@ def get_db_row(wc):
 
     return db_filtered.row(0, named=True)
 
+
 def get_prot_data(wc):
     return get_db_row(wc).get("prot_data")
 
-def get_temp(wc):
-    return SAMPLES[wc.sample]["temperature"]
 
-def get_press(wc):
-    return SAMPLES[wc.sample].get("pressure", myconfig.pressure)
+@dataclass
+class Sample:
+    db_key:str
+    temperature:float
+    ionic_strength:float
+    threshold:float
+    tc:float | None = None
+    start_idx : int |None = None
+    end_idx : int | None = None
+    domain_indices : list[list[tuple[int,int]]] | None = None
+    pressure: float | None = None
+    n_proteins_x : int | None = None
+    n_proteins_y : int | None = None
+    n_proteins_z : int | None = None
 
-def get_ionic_strength(wc):
-    return SAMPLES[wc.sample]["ionic_strength"]
+def get_sample(wc) -> Sample:
+    return Sample(**SAMPLES[wc.sample])
 
-def get_threshold(wc):
-    return SAMPLES[wc.sample]["threshold"]
+def get_attr_from_sample_or_config(wc, attr:str, fallback:bool=False):
+    samp = get_sample(wc)
+    assert hasattr(samp, attr)
 
-def get_start_idx(wc):
-    return SAMPLES[wc.sample].get("start_idx")
+    if fallback:
+        if not hasattr(myconfig, attr):
+            msg = f"You tried to use the attribute `{attr}`, with fallback=true. But `{attr}` is not a member of the `MyConfig` data class."
+            raise Exception(msg)
 
-def get_end_idx(wc):
-    return SAMPLES[wc.sample].get("end_idx")
+    attr_from_sample = getattr(samp, attr)
 
-def get_domain_indices(wc):
-    return SAMPLES[wc.sample].get("domain_indices")
+    # Look in the config as a fallback
+    if attr_from_sample is None and fallback:
+        attr_from_config = getattr(myconfig, attr)
+        if attr_from_config is None:
+            logging.warning(f"{wc.sample}: Looked in sample and in config, but {attr} is still None")
+        return attr_from_config
 
-def get_n_proteins_x(wc):
-    return SAMPLES[wc.sample].get("n_proteins_x", myconfig.n_proteins_x)
+    return attr_from_sample
 
-def get_n_proteins_y(wc):
-    return SAMPLES[wc.sample].get("n_proteins_y", myconfig.n_proteins_y)
-    
-def get_n_proteins_z(wc):
-    return SAMPLES[wc.sample].get("n_proteins_z", myconfig.n_proteins_z)
+get_temp = functools.partial(get_attr_from_sample_or_config, attr="temperature", fallback=True)
+get_press = functools.partial(get_attr_from_sample_or_config, attr="pressure", fallback=True)
+get_ionic_strength = functools.partial(get_attr_from_sample_or_config, attr="ionic_strength", fallback=True)
+get_threshold = functools.partial(get_attr_from_sample_or_config, attr="threshold", fallback=True)
+get_n_proteins_x = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_x", fallback=True)
+get_n_proteins_y = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_y", fallback=True)
+get_n_proteins_z = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_z", fallback=True)
+get_start_idx = functools.partial(get_attr_from_sample_or_config, attr="start_idx")
+get_end_idx = functools.partial(get_attr_from_sample_or_config, attr="end_idx")
+get_domain_indices = functools.partial(get_attr_from_sample_or_config, attr="domain_indices")
 
 ######################################################################
 # Target rules
