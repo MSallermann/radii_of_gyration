@@ -141,6 +141,9 @@ def get_start_idx(wc):
 def get_end_idx(wc):
     return SAMPLES[wc.sample].get("end_idx")
 
+def get_domain_indices(wc):
+    return SAMPLES[wc.sample].get("domain_indices")
+
 def get_n_proteins_x(wc):
     return SAMPLES[wc.sample].get("n_proteins_x", myconfig.n_proteins_x)
 
@@ -214,6 +217,7 @@ rule prepare_coarse_grained_inputs:
         threshold=get_threshold,
         start_idx=get_start_idx,
         end_idx=get_end_idx,
+        domain_indices=get_domain_indices,
         n_steps=myconfig.n_steps,
         timestep=myconfig.timestep,
         minimum_domain_length=myconfig.minimum_domain_length,
@@ -238,7 +242,7 @@ rule prepare_coarse_grained_inputs:
         n_steps_intermediate_pressure=myconfig.n_steps_intermediate_pressure,
         use_berendsen_npt=myconfig.use_berendsen_npt,
         fuse_seq=myconfig.fuse_seq,
-        fuse_merge=myconfig.fuse_merge
+        fuse_merge=myconfig.fuse_merge,
     script:
         workflow.source_path("scripts/coarse_grain_with_glob_scaling.py")
 
@@ -318,7 +322,8 @@ rule average_pair_distance:
         globular_domains_file=f"{myconfig.results_folder}/lammps_files/{{sample}}/domains.json"
     params:
         n_skip=myconfig.rij_skip,
-        use_graph_distance=myconfig.use_rij_graph_distance
+        use_graph_distance=myconfig.use_rij_graph_distance,
+        prot_data=get_prot_data
     output:
         output_csv = f"{myconfig.results_folder}/rij/{{sample}}/pair_distances.csv",
         output_json = f"{myconfig.results_folder}/rij/{{sample}}/rij.json",

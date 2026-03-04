@@ -28,6 +28,7 @@ from mpipi_lammps_gen.generate_lammps_files import (
 from mpipi_lammps_gen.globular_domains import (
     decide_globular_domains_from_sequence,
     merge_domains,
+    GlobularDomain,
 )
 from mpipi_lammps_gen.render_jinja2 import render_jinja2
 from mpipi_lammps_gen.generate_pair_interactions import (
@@ -101,8 +102,12 @@ class Params:
 
 
 def create_lammps_data(
-    params: Params, protein_data: ProteinData, globular_domains_file: Path
+    params: Params,
+    protein_data: ProteinData,
+    globular_domains_file: Path | None,
+    domain_indices: list[list[tuple[int, int]]] | None = None,
 ) -> LammpsData:
+
     # Optionally slice up the proteins
     if params.start_idx is not None or params.end_idx is not None:
         if params.start_idx is None:
@@ -114,54 +119,59 @@ def create_lammps_data(
             protein_data, params.start_idx - 1, params.end_idx - 1
         )
 
-    # Decide groups based on sequence
-    assert protein_data.plddts is not None
-    globular_domains = decide_globular_domains_from_sequence(
-        plddts=protein_data.plddts,
-        threshold=params.threshold,
-        minimum_domain_length=params.minimum_domain_length,
-        minimum_idr_length=params.minimum_idr_length,
-        fuse=params.fuse_seq,
-    )
-
-    # Merge groups based on PAE
-    if params.min_pae_cutoff is not None or params.mean_pae_cutoff is not None:
-        assert protein_data.pae is not None
-
-        pae_matrix_arr = np.array(protein_data.pae)
-
-        globular_domains = merge_domains(
-            globular_domains,
-            should_be_merged=MergePAE(
-                min_pae_cutoff=params.min_pae_cutoff,
-                mean_pae_cutoff=params.mean_pae_cutoff,
-                pae_matrix_arr=pae_matrix_arr,
-            ),
-            fuse=params.fuse_merge,
+    if domain_indices is not None:
+        globular_domains = [
+            GlobularDomain(indices=indices) for indices in domain_indices
+        ]
+    else:
+        # Decide groups based on sequence
+        assert protein_data.plddts is not None
+        globular_domains = decide_globular_domains_from_sequence(
+            plddts=protein_data.plddts,
+            threshold=params.threshold,
+            minimum_domain_length=params.minimum_domain_length,
+            minimum_idr_length=params.minimum_idr_length,
+            fuse=params.fuse_seq,
         )
 
-    # Merge groups based on distance
-    if (
-        params.min_distance_cutoff is not None
-        or params.max_coordination_cutoff is not None
-    ):
-        # if we want to look at the coordination numbers we also need the cutoff for that
-        if params.max_coordination_cutoff is not None:
-            assert params.coordination_distance_cutoff is not None
+        # Merge groups based on PAE
+        if params.min_pae_cutoff is not None or params.mean_pae_cutoff is not None:
+            assert protein_data.pae is not None
 
-        residue_positions = protein_data.get_residue_positions()
-        assert residue_positions is not None
+            pae_matrix_arr = np.array(protein_data.pae)
 
-        globular_domains = merge_domains(
-            globular_domains,
-            should_be_merged=MergeDistance(
-                min_distance_cutoff=params.min_distance_cutoff,
-                max_coordination_cutoff=params.max_coordination_cutoff,
-                coordination_distance_cutoff=params.coordination_distance_cutoff,
-                residue_positions=residue_positions,
-            ),
-            fuse=params.fuse_merge,
-        )
+            globular_domains = merge_domains(
+                globular_domains,
+                should_be_merged=MergePAE(
+                    min_pae_cutoff=params.min_pae_cutoff,
+                    mean_pae_cutoff=params.mean_pae_cutoff,
+                    pae_matrix_arr=pae_matrix_arr,
+                ),
+                fuse=params.fuse_merge,
+            )
+
+        # Merge groups based on distance
+        if (
+            params.min_distance_cutoff is not None
+            or params.max_coordination_cutoff is not None
+        ):
+            # if we want to look at the coordination numbers we also need the cutoff for that
+            if params.max_coordination_cutoff is not None:
+                assert params.coordination_distance_cutoff is not None
+
+            residue_positions = protein_data.get_residue_positions()
+            assert residue_positions is not None
+
+            globular_domains = merge_domains(
+                globular_domains,
+                should_be_merged=MergeDistance(
+                    min_distance_cutoff=params.min_distance_cutoff,
+                    max_coordination_cutoff=params.max_coordination_cutoff,
+                    coordination_distance_cutoff=params.coordination_distance_cutoff,
+                    residue_positions=residue_positions,
+                ),
+                fuse=params.fuse_merge,
+            )
 
     if params.box_buffer is None:
         box_buffer = 0.0
@@ -178,8 +188,9 @@ def create_lammps_data(
         grid_buffer=0,
     )
 
-    with open(globular_domains_file, "w") as f:
-        json.dump([asdict(g) for g in globular_domains], f)
+    if globular_domains_file is not None:
+        with open(globular_domains_file, "w") as f:
+            json.dump([asdict(g) for g in globular_domains], f)
 
     return lammps_data
 
@@ -398,7 +409,11 @@ if __name__ == "__main__":
 
     output_folder = data_file_path.parent
 
-    lammps_data = create_lammps_data(params, protein_data, globular_domains_file)
+    domain_indices = snakemake.params.get("domain_indices")
+
+    lammps_data = create_lammps_data(
+        params, protein_data, globular_domains_file, domain_indices=domain_indices
+    )
 
     create_lammps_files(
         script_path=script_path,
