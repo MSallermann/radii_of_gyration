@@ -30,6 +30,8 @@ class MyConfig:
     n_save_rg : int
     n_save_traj : int
 
+    domains_file : str | None = None
+
     use_rij_graph_distance : bool = True
 
     temperature : float | None = None
@@ -90,6 +92,17 @@ else:
         pl.scan_ipc(database_file).select("key", "prot_data").collect()
     )
 
+
+######################################################################
+# Read in the domains file
+######################################################################
+
+if myconfig.domains_file is not None:
+    domains_file = Path(myconfig.domains_file)
+    with domains_file.open("r") as f:
+        DOMAINS = json.load(f)
+else:
+    DOMAINS = None
 
 ######################################################################
 # Read in the samples file
@@ -179,7 +192,16 @@ get_n_proteins_y = functools.partial(get_attr_from_sample_or_config, attr="n_pro
 get_n_proteins_z = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_z", fallback=True)
 get_start_idx = functools.partial(get_attr_from_sample_or_config, attr="start_idx")
 get_end_idx = functools.partial(get_attr_from_sample_or_config, attr="end_idx")
-get_domain_indices = functools.partial(get_attr_from_sample_or_config, attr="domain_indices")
+
+def get_domain_indices(wc):
+    samp = get_sample(wc)
+
+    domain_indices = samp.domain_indices
+
+    if domain_indices is None:
+        domain_indices = DOMAINS.get(samp.db_key)
+
+    return domain_indices
 
 ######################################################################
 # Target rules
