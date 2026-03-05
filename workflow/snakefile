@@ -114,6 +114,8 @@ with open(myconfig.samples_file, "rb") as f:
 SAMPLES_START_IDX = myconfig.samples_start_idx
 SAMPLES_END_IDX = myconfig.samples_end_idx if myconfig.samples_end_idx is not None else len(SAMPLES)
 
+
+print(f"Read {len(SAMPLES)} samples from {myconfig.samples_file}")
 print(f"{SAMPLES_START_IDX = }")
 print(f"{SAMPLES_END_IDX = }")
 
