@@ -69,7 +69,6 @@ def pair_distance(
     n_skip: int,
     prot_data: ProteinData,
     domains: Iterable[GlobularDomain] | None = None,
-    use_graph_distance: bool = True,
     b_fixed: float = 3.81,
 ):
     u = mda.Universe(lammps_data_file, lammps_traj_file, format="LAMMPSDUMP")
@@ -77,9 +76,6 @@ def pair_distance(
 
     # number of residues
     N = len(atoms)
-
-    if domains is None or not use_graph_distance:
-        domains = []
 
     ############## Topology ###########################
 
@@ -141,22 +137,7 @@ def pair_distance(
     ax.set_ylabel(r"$\sqrt{<R_{ij}^2>}$")
     ax.set_xlabel("|i-j|")
     fig.savefig(output_csv.parent / "ideal_theta.png", dpi=300)
-    ###############################################################
-
-    protein_graph = build_protein_graph(N, domains)
-    separation_matrix = shortest_path_matrix(
-        n_residues=N, domains=list(domains), protein_graph=protein_graph
-    )
-
-    indices_by_separation = []
-    max_sep = 0
-    for sep in range(0, N - 1):
-        mask = separation_matrix == sep
-
-        if np.count_nonzero(mask) > 0:
-            max_sep = sep
-
-        indices_by_separation.append(np.argwhere(mask))
+    ##############################################################
 
     sum_mean = np.zeros(max_sep + 1)
     sum_mean_sq = np.zeros(max_sep + 1)
@@ -171,8 +152,8 @@ def pair_distance(
 
         for sep in range(1, max_sep + 1):
             # for each `sep`, we grab the indices in the sequence which are separated by that much
-            indices = indices_by_separation[sep]
-            r2 = np.linalg.norm(pos[indices[:, 0]] - pos[indices[:, 1]], axis=1) ** 2
+
+            r2 = np.linalg.norm(pos[:-sep] - pos[sep:], axis=1) ** 2
             frame_mean[sep] = r2.mean()
 
         sum_mean += frame_mean
@@ -206,17 +187,17 @@ def pair_distance(
     nu_fixed = popt_fixed_kuhn[0]
 
     # fit with a variable kuhn distance
-    popt_variable_kuhn, pcov_variable_kuhn = curve_fit(
-        fit_fun,
-        xdata=df["sequence_dist"],
-        ydata=df["r_ij_avg"],
-        p0=[b_fixed, 0.5],
-    )
-    b_variable = popt_variable_kuhn[0]
-    nu_variable = popt_variable_kuhn[1]
+    # popt_variable_kuhn, pcov_variable_kuhn = curve_fit(
+    #     fit_fun,
+    #     xdata=df["sequence_dist"],
+    #     ydata=df["r_ij_avg"],
+    #     p0=[b_fixed, 0.5],
+    # )
+    # b_variable = popt_variable_kuhn[0]
+    # nu_variable = popt_variable_kuhn[1]
 
-    y_fit_variable = fit_fun(df["sequence_dist"], b=b_variable, nu=nu_variable)
-    r2_variable = get_r2(y_data=df["r_ij_avg"].to_numpy(), y_fit=y_fit_variable)
+    # y_fit_variable = fit_fun(df["sequence_dist"], b=b_variable, nu=nu_variable)
+    # r2_variable = get_r2(y_data=df["r_ij_avg"].to_numpy(), y_fit=y_fit_variable)
 
     y_fit_fixed = fit_fun(df["sequence_dist"], b=b_fixed, nu=nu_fixed)
     r2_fixed = get_r2(y_data=df["r_ij_avg"].to_numpy(), y_fit=y_fit_fixed)
@@ -226,10 +207,10 @@ def pair_distance(
             {
                 "b_fixed": b_fixed,
                 "nu_fixed": nu_fixed,
-                "b_variable": b_variable,
-                "nu_variable": nu_variable,
+                # "b_variable": b_variable,
+                # "nu_variable": nu_variable,
                 "r2_fixed": r2_fixed,
-                "r2_variable": r2_variable,
+                # "r2_variable": r2_variable,
             },
             f,
         )
@@ -258,11 +239,19 @@ def pair_distance(
     )
 
     ax.plot(
-        df["sequence_dist"],
-        y_fit_variable,
-        color="blue",
-        label=f"Kuhn fit, $R^2$={r2_variable:.2f}, (b={b_variable:.2f}, nu={nu_variable:.2f})",
+        separations,
+        b_fixed * np.sqrt(separations),
+        color="black",
+        ls="--",
+        label="Ideal (IDP)",
     )
+
+    # ax.plot(
+    #     df["sequence_dist"],
+    #     y_fit_variable,
+    #     color="blue",
+    #     label=f"Kuhn fit, $R^2$={r2_variable:.2f}, (b={b_variable:.2f}, nu={nu_variable:.2f})",
+    # )
 
     ax.plot(
         df["sequence_dist"],
