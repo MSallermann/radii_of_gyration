@@ -8,11 +8,48 @@ import json
 import numpy.typing as npt
 from mpipi_lammps_gen.globular_domains import (
     GlobularDomain,
+    protein_topology,
     build_protein_graph,
+    get_path_properties,
+    PathProperties,
     shortest_path_matrix,
 )
-import json
+from mpipi_lammps_gen.generate_lammps_files import ProteinData
 from collections.abc import Iterable
+from networkx import Graph
+import networkx as nx
+
+
+def plot_network(graph, ax, prot_data: ProteinData, use_geom_layout: bool):
+
+    if use_geom_layout:
+        # compute edge lengths
+        edge_length = {
+            k: v / (2 * len(prot_data.sequence_one_letter))
+            for k, v in nx.get_edge_attributes(graph, "length").items()
+        }
+
+        Graph(
+            graph,
+            node_labels=True,
+            edge_labels=False,
+            ax=ax,
+            node_layout="geometric",
+            node_layout_kwargs={"edge_length": edge_length},
+            node_size=1.5,
+            node_edge_width=0.1,
+            edge_width=0.2,
+        )
+    else:
+        Graph(
+            graph,
+            node_labels=True,
+            edge_labels=False,
+            ax=ax,
+            node_size=1.5,
+            node_edge_width=0.1,
+            edge_width=0.2,
+        )
 
 
 def get_r2(y_data: npt.ArrayLike, y_fit: npt.ArrayLike) -> float:
@@ -30,22 +67,85 @@ def pair_distance(
     lammps_data_file: Path,
     lammps_traj_file: Path,
     n_skip: int,
+    prot_data: ProteinData,
     domains: Iterable[GlobularDomain] | None = None,
     use_graph_distance: bool = True,
+    b_fixed: float = 3.81,
 ):
-    u = mda.Universe(
-        lammps_data_file, lammps_traj_file, format="LAMMPSDUMP"
-    )  # adjust filenames
+    u = mda.Universe(lammps_data_file, lammps_traj_file, format="LAMMPSDUMP")
     atoms = u.atoms
 
+    # number of residues
     N = len(atoms)
 
     if domains is None or not use_graph_distance:
         domains = []
 
-    graph = build_protein_graph(n_residues=N, domains=list(domains))
+    ############## Topology ###########################
+
+    graph = protein_topology(n_residues=N, domains=list(domains))
+
+    fig, ax = plt.subplots()
+    plot_network(graph, ax, prot_data, use_geom_layout=False)
+    fig.savefig(output_csv.parent / "network.png", dpi=300)
+
+    assert prot_data.residue_positions is not None
+
+    path_properties_per_residue: dict[tuple[int, int], PathProperties] = {}
+    for i in range(N):
+        for j in range(i + 1, N):
+            path_properties_per_residue[(i, j)] = get_path_properties(
+                graph, i, j, prot_data.residue_positions
+            )
+
+    def path_prop_to_r2(path_prop: PathProperties, b_fixed: float) -> float:
+        expected_r2 = b_fixed**2 * path_props.n_random_segments
+
+        for dist in path_props.fixed_distances:
+            expected_r2 += dist**2
+
+        for loop in path_props.loops:
+            expected_r2 += (
+                b_fixed**2 * np.abs(loop[0]) * np.abs((loop[1] - loop[0]) / loop[0])
+            )
+
+        for loop in path_props.loops:
+            expected_r2 += (
+                b_fixed**2 * np.abs(loop[0]) * np.abs((loop[1] - loop[0]) / loop[0])
+            )
+
+        return expected_r2
+
+    ############## Ideal theta curve ###########################
+    max_sep = N - 1
+    separations = list(range(1, max_sep))
+    rij2_ideal = []
+    for sep in separations:
+        r2_sum = 0
+        count = 0
+        for i in range(N - sep):
+            j = i + sep
+            if j < N:
+                path_props = path_properties_per_residue[i, j]
+                r2_sum += path_prop_to_r2(path_props, b_fixed)
+                count += 1
+
+        rij2_ideal.append(r2_sum / count)
+
+    fig, ax = plt.subplots()
+    ax.plot(separations, np.sqrt(rij2_ideal), color="blue", label="MDP corrections")
+    ax.plot(
+        separations, b_fixed * np.sqrt(separations), color="grey", label="IDP behaviour"
+    )
+    ax.legend()
+    ax.set_ylabel(r"$\sqrt{<R_{ij}^2>}$")
+    ax.set_xlabel("|i-j|")
+    fig.savefig(output_csv.parent / "ideal_theta.png", dpi=300)
+    ###############################################################
+
+    protein_graph = build_protein_graph(N, domains)
     separation_matrix = shortest_path_matrix(
-        n_residues=N, domains=list(domains), protein_graph=graph
+        n_residues=N, domains=list(domains), protein_graph=protein_graph
     )
 
     indices_by_separation = []
@@ -65,19 +165,22 @@ def pair_distance(
     # Iterate over frames in the trajectory
     for ts in u.trajectory[n_skip:]:
         pos = atoms.positions
+
+        # mean of r_ij^2 per frame
         frame_mean = np.zeros(max_sep + 1)
 
         for sep in range(1, max_sep + 1):
+            # for each `sep`, we grab the indices in the sequence which are separated by that much
             indices = indices_by_separation[sep]
-            r = np.linalg.norm(pos[indices[:, 0]] - pos[indices[:, 1]], axis=1)
-            frame_mean[sep] = r.mean()
+            r2 = np.linalg.norm(pos[indices[:, 0]] - pos[indices[:, 1]], axis=1) ** 2
+            frame_mean[sep] = r2.mean()
 
         sum_mean += frame_mean
         sum_mean_sq += frame_mean**2
         n_frames += 1
 
-    R_sep = sum_mean / n_frames
-    var = (sum_mean_sq - n_frames * R_sep**2) / (n_frames - 1)
+    R_sep = np.sqrt(sum_mean / n_frames)
+    var = np.sqrt((sum_mean_sq - n_frames * R_sep**2) / (n_frames - 1))
     R_sep_err = np.sqrt(var / n_frames)
 
     df = pl.DataFrame(
@@ -94,7 +197,6 @@ def pair_distance(
     fit_fun = np.vectorize(_fit_fun)
 
     # fit with a fixed kuhn distance
-    b_fixed = 5.5
     popt_fixed_kuhn, pcov_fixed_kuhn = curve_fit(
         lambda ij, nu: fit_fun(ij, b=b_fixed, nu=nu),
         xdata=df["sequence_dist"],
@@ -108,7 +210,7 @@ def pair_distance(
         fit_fun,
         xdata=df["sequence_dist"],
         ydata=df["r_ij_avg"],
-        p0=[5.5, 0.5],
+        p0=[b_fixed, 0.5],
     )
     b_variable = popt_variable_kuhn[0]
     nu_variable = popt_variable_kuhn[1]
@@ -148,6 +250,14 @@ def pair_distance(
     )
 
     ax.plot(
+        separations,
+        np.sqrt(rij2_ideal),
+        color="black",
+        ls="-",
+        label="Ideal with MDP corrections",
+    )
+
+    ax.plot(
         df["sequence_dist"],
         y_fit_variable,
         color="blue",
@@ -162,7 +272,7 @@ def pair_distance(
     )
 
     ax.set_xlabel("|i-j|")
-    ax.set_ylabel("|Rij| [Angs.]")
+    ax.set_ylabel(r"$\sqrt{<R_{ij}^2>}$")
     ax.legend()
     fig.savefig(output_csv.parent / "plot.png", dpi=300)
 
@@ -187,5 +297,6 @@ if __name__ == "__main__":
         lammps_traj_file=Path(snakemake.input["lammps_traj_file"]),
         n_skip=snakemake.params["n_skip"],
         domains=domains,
+        prot_data=ProteinData(**snakemake.params["prot_data"]),
         use_graph_distance=snakemake.params["use_graph_distance"],
     )
