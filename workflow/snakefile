@@ -188,7 +188,7 @@ def get_attr_from_sample_or_config(wc, attr:str, fallback:bool=False, warn_if_no
 get_temp = functools.partial(get_attr_from_sample_or_config, attr="temperature", fallback=True)
 get_press = functools.partial(get_attr_from_sample_or_config, attr="pressure", fallback=True, warn_if_none=False) # pressure is allowed to be none
 get_ionic_strength = functools.partial(get_attr_from_sample_or_config, attr="ionic_strength", fallback=True)
-get_threshold = functools.partial(get_attr_from_sample_or_config, attr="threshold", fallback=True)
+get_threshold = functools.partial(get_attr_from_sample_or_config, attr="threshold", fallback=True, warn_if_none=False) # threshold is allowed to be none
 get_n_proteins_x = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_x", fallback=True)
 get_n_proteins_y = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_y", fallback=True)
 get_n_proteins_z = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_z", fallback=True)
