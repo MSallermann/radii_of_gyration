@@ -32,6 +32,12 @@ class MyConfig:
 
     domains_file : str | None = None
 
+    # If an entry is missing from the domains file, should it be assumed to be
+    # intrinsically disordered protein (IDP)?
+    # .. if `True`, it will be assumed to be an IDP (no frozen domains)
+    # .. if `False`, a different domain criterion will be attempted
+    assume_idp_if_not_in_domains_file : bool = True
+
     use_rij_graph_distance : bool = True
 
     temperature : float | None = None
@@ -204,6 +210,9 @@ def get_domain_indices(wc):
 
     if domain_indices is None and DOMAINS is not None:
         domain_indices = DOMAINS.get(samp.db_key)
+
+    if domain_indices is None and myconfig.assume_idp_if_not_in_domains_file:
+        return []
 
     return domain_indices
 
