@@ -121,7 +121,7 @@ print(f"{SAMPLES_END_IDX = }")
 
 drop_idx = []
 for idx, k in enumerate(SAMPLES):
-    if idx >= SAMPLES_START_IDX and idx<SAMPLES_END_IDX:
+    if idx >= SAMPLES_START_IDX and idx < SAMPLES_END_IDX:
         continue
     else:
         drop_idx.append(k)
@@ -149,9 +149,9 @@ def get_prot_data(wc):
 
 @dataclass
 class Sample:
-    db_key:str
-    temperature:float
-    ionic_strength:float
+    db_key : str
+    temperature : float | None = None
+    ionic_strength : float | None = None
     threshold:float = None
     tc:float | None = None
     start_idx : int |None = None
@@ -185,9 +185,9 @@ def get_attr_from_sample_or_config(wc, attr:str, fallback:bool=False, warn_if_no
 
     return attr_from_sample
 
-get_temp = functools.partial(get_attr_from_sample_or_config, attr="temperature", fallback=True)
+get_temp = functools.partial(get_attr_from_sample_or_config, attr="temperature", fallback=True, warn_if_none=True)
 get_press = functools.partial(get_attr_from_sample_or_config, attr="pressure", fallback=True, warn_if_none=False) # pressure is allowed to be none
-get_ionic_strength = functools.partial(get_attr_from_sample_or_config, attr="ionic_strength", fallback=True)
+get_ionic_strength = functools.partial(get_attr_from_sample_or_config, attr="ionic_strength", fallback=True, warn_if_none=True)
 get_threshold = functools.partial(get_attr_from_sample_or_config, attr="threshold", fallback=True, warn_if_none=False) # threshold is allowed to be none
 get_n_proteins_x = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_x", fallback=True)
 get_n_proteins_y = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_y", fallback=True)
