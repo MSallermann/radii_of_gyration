@@ -98,9 +98,11 @@ else:
 ######################################################################
 
 if myconfig.domains_file is not None:
+    print(f"Reading domains from {myconfig.domains_file}")
     domains_file = Path(myconfig.domains_file)
     with domains_file.open("r") as f:
         DOMAINS = json.load(f)
+    print{f"    ... read {len(DOMAINS)} entries from file}
 else:
     DOMAINS = None
 
@@ -152,8 +154,8 @@ class Sample:
     db_key : str
     temperature : float | None = None
     ionic_strength : float | None = None
-    threshold:float = None
-    tc:float | None = None
+    threshold : float | None = None
+    tc : float | None = None
     start_idx : int |None = None
     end_idx : int | None = None
     domain_indices : list[list[tuple[int,int]]] | None = None
