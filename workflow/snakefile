@@ -108,7 +108,7 @@ if myconfig.domains_file is not None:
     domains_file = Path(myconfig.domains_file)
     with domains_file.open("r") as f:
         DOMAINS = json.load(f)
-    print{f"    ... read {len(DOMAINS)} entries from file}
+    print(f"    ... read {len(DOMAINS)} entries from file")
 else:
     DOMAINS = None
 
