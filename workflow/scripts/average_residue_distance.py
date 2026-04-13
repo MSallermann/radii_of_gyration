@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Annotated, Optional
 
 import MDAnalysis as mda
 import matplotlib.pyplot as plt
@@ -390,16 +389,6 @@ def pair_distance(
     fig.savefig(output_csv.parent / "plot.png", dpi=300)
 
 
-def _load_domains(domains_file: Path | None) -> list[GlobularDomain] | None:
-    if domains_file is None:
-        return None
-
-    with domains_file.open("r") as f:
-        raw = json.load(f)
-
-    return [GlobularDomain(**item) for item in raw]
-
-
 def run_from_snakemake(snakemake) -> None:
     domains_file = snakemake.input.get("globular_domains_file")
     if domains_file is None:
@@ -416,7 +405,7 @@ def run_from_snakemake(snakemake) -> None:
         n_skip=snakemake.params["n_skip"],
         domains=domains,
         kuhn_fixed=snakemake.params.get("kuhn_length", 5.5),
-        bond_length=snakemake.params.get("b_fixed", 3.81),
+        bond_length=snakemake.params.get("bond_length", 3.81),
     )
 
 
