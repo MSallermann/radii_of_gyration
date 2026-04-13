@@ -68,7 +68,11 @@ def path_prop_to_r2(
     """
     Convert path properties into an expected <R_ij^2>.
     """
-    expected_r2 = kuhn_length * bond_length * path_prop.random_walk_contour_length**nu
+    expected_r2 = (
+        kuhn_length
+        * bond_length
+        * (path_prop.random_walk_contour_length / bond_length) ** nu
+    )
 
     for dist in path_prop.fixed_distances:
         expected_r2 += dist**2
@@ -245,29 +249,79 @@ def pair_distance(
     ######################################
     # Fit with fixed kuhn length
     ######################################
-    def _fit_fun_fixed_kuhn(ij: float, nu: float) -> float:
+    def _fit_fun_fixed_kuhn(ij: int, nu: float) -> float:
+        """For an IDP, this is equivalent to
         return kuhn_fixed * bond_length * ij**nu
-    
+        """
+
+        r2 = 0.0
+        count = 0
+
+        sep = round(ij)
+
+        if sep == 0:
+            return 0.0
+
+        for i in range(n_residues - sep):
+            j = i + sep
+            path_prop = path_properties_per_residue[(i, j)]
+            r2 += path_prop_to_r2(
+                path_prop=path_prop,
+                kuhn_length=kuhn_fixed,
+                bond_length=bond_length,
+                nu=nu,
+            )
+            count += 1
+
+        return r2 / count
+
+    fit_fun_fixed_kuhn = np.vectorize(_fit_fun_fixed_kuhn)
 
     popt_fixed_kuhn, _pcov_fixed_kuhn = curve_fit(
-        _fit_fun_fixed_kuhn,
+        fit_fun_fixed_kuhn,
         xdata=fit_df["sequence_dist"].to_numpy(),
         ydata=fit_df["r_ij2_avg"].to_numpy(),
         p0=[1.0],
     )
     nu_fixed = float(popt_fixed_kuhn[0])
 
-    y_fit_fixed = _fit_fun_fixed_kuhn(df["sequence_dist"].to_numpy(), *popt_fixed_kuhn)
+    y_fit_fixed = fit_fun_fixed_kuhn(df["sequence_dist"].to_numpy(), *popt_fixed_kuhn)
     r2_fixed = get_r2(y_data=df["r_ij2_avg"].to_numpy(), y_fit=y_fit_fixed)
 
     ######################################
     # Fit with variable kuhn length
     ######################################
-    def _fit_fun_var_kuhn(ij: float, kuhn: float, nu: float) -> float:
+
+    def _fit_fun_var_kuhn(ij: int, kuhn: float, nu: float) -> float:
+        """For an IDP, this is equivalent to
         return kuhn * bond_length * ij**nu
+        """
+
+        r2 = 0.0
+        count = 0
+
+        sep = round(ij)
+
+        if sep == 0:
+            return 0.0
+
+        for i in range(n_residues - sep):
+            j = i + sep
+            path_prop = path_properties_per_residue[(i, j)]
+            r2 += path_prop_to_r2(
+                path_prop=path_prop,
+                kuhn_length=kuhn,
+                bond_length=bond_length,
+                nu=nu,
+            )
+            count += 1
+
+        return r2 / count
+
+    fit_fun_var_kuhn = np.vectorize(_fit_fun_var_kuhn)
 
     popt_var_kuhn, _pcov_var_kuhn = curve_fit(
-        _fit_fun_var_kuhn,
+        fit_fun_var_kuhn,
         xdata=fit_df["sequence_dist"].to_numpy(),
         ydata=fit_df["r_ij2_avg"].to_numpy(),
         p0=[kuhn_fixed, 1.0],
@@ -275,7 +329,7 @@ def pair_distance(
     kuhn_var = float(popt_var_kuhn[0])
     nu_var = float(popt_var_kuhn[1])
 
-    y_fit_var = _fit_fun_var_kuhn(df["sequence_dist"].to_numpy(), *popt_var_kuhn)
+    y_fit_var = fit_fun_var_kuhn(df["sequence_dist"].to_numpy(), *popt_var_kuhn)
     r2_var = get_r2(y_data=df["r_ij2_avg"].to_numpy(), y_fit=y_fit_var)
 
     with output_json.open("w") as f:
