@@ -413,7 +413,7 @@ def pair_distance(
     )
 
     ax.set_xlabel("|i-j|")
-    ax.set_ylabel(r"$\sqrt{<R_{ij}^2>}$")
+    ax.set_ylabel(r"$<R_{ij}^2>$")
     ax.legend()
     fig.savefig(output_csv.parent / "plot.png", dpi=300)
 
