@@ -15,8 +15,16 @@ from mpipi_lammps_gen.globular_domains import GlobularDomain, protein_topology
 from mpipi_lammps_gen.shortest_path_graph import (
     PathProperties,
     build_shortest_path_graph,
-    get_path_properties,
 )
+from mpipi_lammps_gen.shortest_path_graph_cached import (
+    build_path_query_cache,
+    get_path_properties_cached,
+)
+
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = typer.Typer(
     add_completion=False,
@@ -113,8 +121,11 @@ def pair_distance(
     ######################################
     # Topology
     ######################################
+
+    logger.info("... building topology")
     topology = protein_topology(n_residues=n_residues, domains=domains_list)
 
+    logger.info("... building shortest path graph")
     shortest_path_graph = build_shortest_path_graph(
         topology,
         residue_positions,
@@ -122,18 +133,34 @@ def pair_distance(
         segment_length=None,
     )
 
+    logger.info("... building path query cache")
+    cache = build_path_query_cache(
+        topology=topology,
+        residue_positions=residue_positions,
+        bond_length=bond_length,
+        shortest_path_graph=shortest_path_graph,
+    )
+
+    logger.info("... recording per residue path properties")
     path_properties_per_residue: dict[tuple[int, int], PathProperties] = {}
+
+    n_pairs = int(n_residues * (n_residues - 1) / 2)
+    n_pairs_done = 0
     for i in range(n_residues):
         for j in range(i + 1, n_residues):
-            path_properties_per_residue[(i, j)] = get_path_properties(
-                topology=topology,
+            path_properties_per_residue[(i, j)] = get_path_properties_cached(
+                cache=cache,
                 i1=i,
                 i2=j,
-                residue_positions=residue_positions,
-                shortest_path_graph=shortest_path_graph,
-                bond_length=bond_length,
-                segment_length=None,
             )
+            n_pairs_done += 1
+
+            if n_pairs_done % 500 == 0:
+                logging.info(
+                    f"{n_pairs_done} of {n_pairs} done ({n_pairs_done / n_pairs * 100:.1f} %)"
+                )
+
+    logger.info("done")
 
     ######################################
     # Ideal theta curve
