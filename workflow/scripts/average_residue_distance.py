@@ -104,6 +104,8 @@ def pair_distance(
     kuhn_fixed: float = 5.5,
     bond_length: float = 3.81,
     max_sequence_dist_fit: int | None = None,
+    log_progress: bool = False,
+    n_pairs_log: int = 10000,
 ) -> None:
     u = mda.Universe(lammps_data_file, lammps_traj_file, format="LAMMPSDUMP")
     atoms = u.atoms
@@ -155,9 +157,9 @@ def pair_distance(
             )
             n_pairs_done += 1
 
-            if n_pairs_done % 500 == 0:
-                logging.info(
-                    f"{n_pairs_done} of {n_pairs} done ({n_pairs_done / n_pairs * 100:.1f} %)"
+            if log_progress and n_pairs_done % n_pairs_log == 0:
+                logger.info(
+                    f"{n_pairs_done} of {n_pairs} done ({n_pairs_done / n_pairs * 100:.1f}%)"
                 )
 
     logger.info("done")
