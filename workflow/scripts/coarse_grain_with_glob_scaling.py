@@ -381,6 +381,7 @@ if __name__ == "__main__":
     protein_data_dict = snakemake.params["prot_data"]
     protein_data = ProteinData(**protein_data_dict)
 
+    # How to determine residue location
     residue_location = snakemake.params.get("residue_location", "Ca")
 
     if residue_location is not None:
@@ -398,13 +399,13 @@ if __name__ == "__main__":
         else:
             method = residue_location
 
-        residue_positions = (
-            protein_data.compute_residue_positions(method=method) is not None
-        )
+        residue_positions = protein_data.compute_residue_positions(method=method)
     else:
         residue_positions = protein_data.get_residue_positions()
 
-    assert residue_positions is not None
+    if residue_positions is None:
+        msg = f"Could not determine residue positions. The `residue_location` method was `{residue_location}`. The {protein_data.residue_positions is None =}"
+        raise Exception(msg)
 
     wf_interactions = rescale_wf_interactions(
         idr_glob_rescaling=snakemake.params["idr_glob_rescaling"],
