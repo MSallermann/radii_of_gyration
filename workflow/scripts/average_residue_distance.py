@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 from collections.abc import Iterable
 from pathlib import Path
@@ -8,7 +6,6 @@ import MDAnalysis as mda
 import matplotlib.pyplot as plt
 import numpy as np
 import polars as pl
-import typer
 from scipy.optimize import curve_fit
 
 from mpipi_lammps_gen.globular_domains import GlobularDomain, protein_topology
@@ -25,11 +22,6 @@ from mpipi_lammps_gen.shortest_path_graph_cached import (
 import logging
 
 logger = logging.getLogger(__name__)
-
-app = typer.Typer(
-    add_completion=False,
-    help="Pair-distance analysis for LAMMPS trajectories.",
-)
 
 
 def get_r2(y_data: np.ndarray, y_fit: np.ndarray) -> float:
@@ -418,7 +410,7 @@ def pair_distance(
     fig.savefig(output_csv.parent / "plot.png", dpi=300)
 
 
-def run_from_snakemake(snakemake) -> None:
+if __name__ == "__main__":
     domains_file = snakemake.input.get("globular_domains_file")
     if domains_file is None:
         domains = None
@@ -437,11 +429,3 @@ def run_from_snakemake(snakemake) -> None:
         bond_length=snakemake.params.get("bond_length", 3.81),
     )
 
-
-if __name__ == "__main__":
-    try:
-        from snakemake.script import snakemake  # type: ignore[name-defined]
-    except ImportError:
-        snakemake = None
-
-    run_from_snakemake(snakemake)
