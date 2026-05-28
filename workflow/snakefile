@@ -169,6 +169,7 @@ class Sample:
     n_proteins_x : int | None = None
     n_proteins_y : int | None = None
     n_proteins_z : int | None = None
+    lammps_script_template : str | None = None
 
 def get_sample(wc) -> Sample:
     return Sample(**SAMPLES[wc.sample])
@@ -206,6 +207,7 @@ get_n_proteins_y = functools.partial(get_attr_from_sample_or_config, attr="n_pro
 get_n_proteins_z = functools.partial(get_attr_from_sample_or_config, attr="n_proteins_z", fallback=True)
 get_start_idx = functools.partial(get_attr_from_sample_or_config, attr="start_idx")
 get_end_idx = functools.partial(get_attr_from_sample_or_config, attr="end_idx")
+get_lammps_script_template = functools.partial(get_attr_from_sample_or_config, attr="lammps_script_template", fallback=True, err_if_none=True)
 
 def get_domain_indices(wc):
     samp = get_sample(wc)
@@ -268,7 +270,7 @@ rule calvados:
 rule prepare_coarse_grained_inputs:
     localrule: True
     input:
-        template_file=ancient(myconfig.lammps_script_template),
+        template_file=get_lammps_script_template,
     shadow:
         "copy-minimal"
     threads: 1
