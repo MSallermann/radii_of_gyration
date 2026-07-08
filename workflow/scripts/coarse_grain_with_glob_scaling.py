@@ -79,6 +79,7 @@ class Params:
     n_proteins_x: int = 1
     n_proteins_y: int = 1
     n_proteins_z: int = 1
+    n_proteins_max: int | None = None
 
     box_buffer: float | None = 1.0
 
@@ -185,7 +186,8 @@ def create_lammps_data(
         n_proteins_x=params.n_proteins_x,
         n_proteins_y=params.n_proteins_y,
         n_proteins_z=params.n_proteins_z,
-        grid_buffer=0,
+        n_proteins_max=params.n_proteins_max,
+        grid_buffer=4.5,
     )
 
     if globular_domains_file is not None:
@@ -369,6 +371,7 @@ if __name__ == "__main__":
         n_proteins_x=snakemake.params.get("n_proteins_x", 1),
         n_proteins_y=snakemake.params.get("n_proteins_y", 1),
         n_proteins_z=snakemake.params.get("n_proteins_z", 1),
+        n_proteins_max=snakemake.params.get("n_proteins_max"),
         intermediate_press=snakemake.params.get("intermediate_pressure"),
         n_steps_intermediate_press=snakemake.params.get(
             "n_steps_intermediate_pressure"
